@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.08",
+  "version": "2026.09.09",
   "model": "m1.0",
-  "notes": "The report list is gone: the sparklines are now scrubbable and one readout line shows whichever report you pick."
+  "notes": "Folder access has a role: the app detects whether this account can actually write to the shared folder and shows a read-only board when it cannot, instead of controls that save nothing the team can see."
 }

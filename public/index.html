@@ -452,6 +452,15 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
   border:1px solid var(--axis);border-radius:var(--r-sm)}
 .trk:hover{color:var(--ink);background:var(--wash2);border-color:var(--ink)}
 .trk.on{background:var(--good);border-color:var(--good);color:#fff}
+/* read-only: the same marks, minus every affordance that says "press me" */
+.trk.ro{cursor:default}
+.trk.ro:hover{background:var(--good);border-color:var(--good);color:#fff}
+.trk.ph{border-color:transparent;background:none}
+.trkro{display:inline-block;color:var(--ink2);font-size:var(--fs-xs);font-weight:600;
+  padding:3px 7px;background:var(--wash2);border-radius:var(--r-sm)}
+.trkst.ro span.on{display:inline-block;background:var(--ink);color:var(--page);
+  font-size:var(--fs-xs);font-weight:600;padding:3px 7px;border-radius:var(--r-sm)}
+.rolelab{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
 .trkhead{display:flex;gap:calc(6px*var(--d));align-items:center;flex-wrap:wrap;
   margin:calc(10px*var(--d)) 0 calc(6px*var(--d))}
 .trkhead .sp{flex:1}
@@ -701,6 +710,10 @@ table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
 .dtitle .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .dtitle .dot.on{background:var(--good)} .dtitle .dot.wait{background:var(--serious)}
 .dtitle .dot.off{background:var(--muted)}
+.dtitle .dot.ro{background:var(--muted);box-shadow:0 0 0 2px var(--wash2)}
+.robadge{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink2);background:var(--wash2);border:1px solid var(--axis);
+  padding:1px 7px;border-radius:999px}
 .dsub{font-size:var(--fs-sm);color:var(--ink2);margin-top:2px;line-height:1.5}
 .dsub code{background:var(--wash2);padding:1px 5px;border-radius:4px;font-size:var(--fs-xs)}
 .dacts{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
@@ -824,7 +837,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.08";
+const APP_VERSION   = "2026.09.09";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1798,6 +1811,7 @@ const FOLDER = {
     const h = await window.showDirectoryPicker({mode:"readwrite", id:"cbrc-reports"});
     this.handle=h; this.name=h.name; this.state="connected";
     await idbSet("dir", h);
+    await this.probe();
     return h;
   },
   async restore(){
@@ -1808,6 +1822,7 @@ const FOLDER = {
     let perm="prompt";
     try{ perm = await h.queryPermission({mode:"readwrite"}); }catch(e){ perm="prompt"; }
     this.state = perm==="granted" ? "connected" : "needs-permission";
+    if(this.state==="connected") await this.probe();
     return true;
   },
   async grant(){
@@ -1815,12 +1830,64 @@ const FOLDER = {
     let perm="denied";
     try{ perm = await this.handle.requestPermission({mode:"readwrite"}); }catch(e){ perm="denied"; }
     this.state = perm==="granted" ? "connected" : "needs-permission";
+    if(this.state==="connected") await this.probe();
     return this.state==="connected";
   },
   async disconnect(){
     this.handle=null; this.name=null; this.state="none"; this.found=0; this.skipped=[];
+    this.writable=null;
     await idbDel("dir");
   },
+
+  /* ---- what this browser may do to the folder ----
+     This enforces nothing and must never be mistaken for enforcement: it is
+     client-side JavaScript reading a folder the operating system has already
+     decided this account may or may not write. The shared drive is the gate.
+     What this buys is honesty. Without it a viewer's clicks land in
+     localStorage, fold into their own board, and look exactly like a change
+     the team can see — while reaching nobody. Read-only has to look
+     read-only. */
+  LS_ROLE: "cbrc.folder.role",           /* "auto" | "viewer" */
+  PROBE:   ".cbrc-access-check",
+  writable: null,                        /* null = not probed yet */
+
+  rolePref(){
+    try{ return localStorage.getItem(this.LS_ROLE)==="viewer" ? "viewer" : "auto"; }
+    catch(e){ return "auto"; }
+  },
+  setRolePref(v){
+    try{ localStorage.setItem(this.LS_ROLE, v==="viewer"?"viewer":"auto"); }catch(e){}
+  },
+
+  /* The only honest test of a synced drive is to write to it. Drive, Dropbox
+     and OneDrive all hand out a directory handle for a folder they will then
+     refuse to modify, so a granted browser permission proves nothing at all.
+     The probe is a dot-file, removed immediately, and invisible to both
+     scan() (.csv only) and readTracker() (.jsonl only) even if a crash were
+     to strand it. */
+  async probe(){
+    if(!this.handle || this.state!=="connected"){ this.writable=null; return null; }
+    try{
+      const fh = await this.handle.getFileHandle(this.PROBE, {create:true});
+      const w  = await fh.createWritable();
+      await w.write(new Blob([""]));
+      await w.close();
+      this.writable = true;
+    }catch(e){ this.writable = false; }
+    try{ await this.handle.removeEntry(this.PROBE); }catch(e){}
+    return this.writable;
+  },
+
+  /* With no folder connected nothing is shared, so there is nobody to mislead
+     and everything stays local and writable. An unprobed folder is treated as
+     writable: the probe runs at every connect, and guessing read-only would
+     grey out the owner's own controls for the first paint. */
+  canWrite(){
+    if(this.state!=="connected") return true;
+    if(this.rolePref()==="viewer") return false;
+    return this.writable !== false;
+  },
+  isViewer(){ return this.state==="connected" && !this.canWrite(); },
 
   /* read every portal export in the folder. Subdirectories (including
      audits/) are skipped, and our own audit files are ignored even if one
@@ -1856,6 +1923,7 @@ const FOLDER = {
   },
   async writeFile(name, text){
     if(!this.handle || this.state!=="connected") throw new Error("No folder connected.");
+    if(!this.canWrite()) throw new Error("This folder is read-only for you.");
     const dir = await this.auditDir();
     const fh = await dir.getFileHandle(name, {create:true});
     const w = await fh.createWritable();
@@ -1888,6 +1956,7 @@ const FOLDER = {
   },
   async writeTracker(name, text){
     if(!this.handle || this.state!=="connected") throw new Error("No folder connected.");
+    if(!this.canWrite()) throw new Error("This folder is read-only for you.");
     const dir = await this.trackDir(true);
     const fh = await dir.getFileHandle(name, {create:true});
     const w = await fh.createWritable();
@@ -1976,6 +2045,11 @@ const TRACKER = {
 
   /* ---- the log ---- */
   push(ev){
+    /* Every writer — track, untrack, action, note, status — comes through
+       here, so this is the only place a read-only browser has to be stopped.
+       Recording it locally would be worse than refusing: it would show on
+       this board and no other. */
+    if(FOLDER.isViewer()) return null;
     const dev = this.device();
     ev.dev = dev;
     ev.id  = dev + "-" + (++this.seq);
@@ -1988,6 +2062,7 @@ const TRACKER = {
   },
   async flush(){
     if(FOLDER.state!=="connected") return false;
+    if(!FOLDER.canWrite()) return false;
     /* nothing tracked yet: do not create tracker/ or drop an empty file into
        a shared drive. Untracking is itself an event, so the only way to have
        no events is never to have used the tracker at all. */
@@ -2057,7 +2132,12 @@ const TRACKER = {
     const seen={}, src=[];
     const take = e => { if(e && e.id && !seen[e.id]){ seen[e.id]=1; src.push(e); } };
     this.all.forEach(take);
-    this.mine.forEach(take);
+    /* A read-only browser contributes nothing to the folder, so its own log
+       must not colour what it shows. Folding it in would paint local edits
+       that reached no one as though the team could see them — and those are
+       exactly the edits that were refused above, or were made before the
+       folder went read-only. */
+    if(!FOLDER.isViewer()) this.mine.forEach(take);
     const evs = src.sort((a,b)=>
       (trackStampMs(a.ts)||0) - (trackStampMs(b.ts)||0) || String(a.id).localeCompare(String(b.id)));
     const st = {};
@@ -2240,18 +2320,23 @@ function dataStripHTML(){
 
   /* ---- state 3: connected ---- */
   if(FOLDER.state==="connected"){
+    const ro = FOLDER.isViewer();
     return `<div class="data"><div class="drow">
       <span class="dicon">&#128193;</span>
       <div class="dmain">
-        <div class="dtitle"><span class="dot on"></span>${esc(FOLDER.name)}
+        <div class="dtitle"><span class="dot ${ro?"ro":"on"}"></span>${esc(FOLDER.name)}
+          ${ro?`<span class="robadge">View only</span>`:""}
           <span class="sub" style="font-weight:400;color:var(--muted);font-size:var(--fs-sm)">
             ${FOLDER.found} export${FOLDER.found===1?"":"s"}${ns?` · newest ${esc(ns.full)}`:""}</span>
         </div>
-        <div class="dsub">Audits save to <code>${esc(FOLDER.name)}/${FOLDER.AUDIT_DIR}/</code>
-          and are never read back in. Add a new export to the folder, then reload.</div></div>
+        <div class="dsub">${ro
+          ? `Reports and the team tracker load in full. Adding exports, saving audits and changing
+             the tracker are done by whoever holds edit access to this folder.`
+          : `Audits save to <code>${esc(FOLDER.name)}/${FOLDER.AUDIT_DIR}/</code>
+             and are never read back in. Add a new export to the folder, then reload.`}</div></div>
       <div class="dacts">
         <button class="btn p" id="btnRescan">Reload</button>
-        <button class="btn" id="btnSaveFolder">Save audit</button>
+        ${ro?"":`<button class="btn" id="btnSaveFolder">Save audit</button>`}
         <button class="btn" id="btnConnect">Change folder</button></div></div>
       ${n?`<div class="dtabs">${tabs}</div>`:""}
       <div class="dhint">Tabs come from the folder, so they return on every reload.
@@ -2890,6 +2975,10 @@ function modelPanelHTML(A){
         one persists in this browser.</span></div>
     </div>
     <div class="setblock">
+      <h4>This browser's folder access <span class="out">— mirrors the drive, grants nothing</span></h4>
+      ${folderAccessHTML()}
+    </div>
+    <div class="setblock">
       <h4>Tier cutoffs</h4>
       <div class="setrow"><span class="badge"><span class="dot d-c"></span>Act today</span>
         at weighted ${numIn("tierCrit",M.tierCrit,1)} and above</div>
@@ -2913,6 +3002,25 @@ const MODEL_DEFAULTS = JSON.parse(JSON.stringify({
   f5Cbp:2, f5Cb:5, thinSales:250, bonHi:5, bonHiPts:6, bonMid:3, bonMidPts:3,
   tierCrit:16, tierHigh:10
 }));
+/* Reports what the folder actually allows, and lets a browser that *could*
+   write choose not to. It cannot grant anything: permission is decided by the
+   shared drive, and this only stops the page from lying about it. */
+function folderAccessHTML(){
+  const conn = FOLDER.state==="connected";
+  const w = FOLDER.writable;
+  const det = !conn      ? "no folder connected — everything stays in this browser"
+            : w===false  ? "read-only — this account cannot write to the folder"
+            : w===true   ? "read and write — this account can write to the folder"
+                         : "not checked yet";
+  return `<div class="setrow">Detected: <b>${esc(det)}</b>
+      ${conn?`<button class="btn sm" id="btnRoleProbe">Re-check</button>`:""}</div>
+    <div class="setrow"><label class="rolelab"><input type="checkbox" id="roleViewer"
+      ${FOLDER.rolePref()==="viewer"?"checked":""}> Stay read-only in this browser</label></div>
+    <div class="setrow"><span class="out">Who may write is decided by the shared drive, not here.
+      This page only matches it, so a viewer gets a read-only board instead of buttons that save
+      nothing anyone else will ever see. Tick the box to stay read-only on a browser that
+      <b>could</b> write.</span></div>`;
+}
 function settingsPageHTML(A){
   return `<div class="setwrap">
     ${modelPanelHTML(A)}
@@ -3019,11 +3127,14 @@ function trkMetric(v, dp){
   return v==null ? "not available" : Number(v).toFixed(dp)+"%";
 }
 function actionSelect(mid, cur){
+  if(FOLDER.isViewer()) return `<span class="trkro">${esc(cur)}</span>`;
   return `<select class="trkact" data-action-for="${esc(mid)}">${
     TRACK_ACTION_NAMES.map(n=>`<option value="${esc(n)}"${n===cur?" selected":""}>${esc(n)}</option>`)
     .join("")}</select>`;
 }
 function statusBtns(mid, cur){
+  if(FOLDER.isViewer())
+    return `<span class="trkst ro"><span class="on">${esc(TRACK_LABEL[cur]||cur)}</span></span>`;
   return `<span class="trkst">${TRACK_STATUS.map(st=>
     `<button class="${st===cur?"on":""}" data-status-for="${esc(mid)}" data-status="${st}"
        >${esc(TRACK_LABEL[st])}</button>`).join("")}</span>`;
@@ -3044,7 +3155,8 @@ function trackerRowHTML(t, A){
       ${actionSelect(t.mid, t.action)}
       <span class="cur">${esc(spec.label)} now <b>${trkMetric(now, spec.dp)}</b></span>
       ${statusBtns(t.mid, t.status)}
-      <button class="trkx" data-untrack="${esc(t.mid)}" title="Stop tracking">Remove</button>
+      ${FOLDER.isViewer()?"":
+        `<button class="trkx" data-untrack="${esc(t.mid)}" title="Stop tracking">Remove</button>`}
     </div>
   </div>`;
 }
@@ -3079,7 +3191,9 @@ function outcomeRowHTML(o, A){
     <div class="tmeta">
       <span class="ac">${esc(o.action)}</span>
       <span class="cur">${esc(o.metricLabel)} · ${detail}</span>
-      ${o.status==="done"
+      ${FOLDER.isViewer()
+        ? `<span class="trkro">${esc(TRACK_LABEL[o.status]||o.status)}</span>`
+        : o.status==="done"
         ? `<button class="trkc" data-status-for="${esc(o.mid)}" data-status="closed">Close</button>`
         : `<button class="trkc" data-status-for="${esc(o.mid)}" data-status="done">Reopen</button>`}
     </div>
@@ -3098,7 +3212,8 @@ function trackerPageHTML(A){
         <span class="c">${c.done+c.closed}</span></button>
     </div>
     <span class="sp"></span>
-    <button class="btn" id="btnTrkSync">${FOLDER.state==="connected"?"Sync with team":"Connect a folder"}</button>
+    <button class="btn" id="btnTrkSync">${FOLDER.state!=="connected" ? "Connect a folder"
+      : FOLDER.isViewer() ? "Refresh from team" : "Sync with team"}</button>
     <button class="btn" id="btnTrkCopy">Copy</button>
     <button class="btn" id="btnTrkCsv">Download CSV</button>
   </div>`);
@@ -3241,6 +3356,25 @@ function wireViews(){
   });
   const c=$("#mClose"); if(c) c.onclick=()=>{MT.sel=null; render();};
   const cd=$("#btnCopyDetail"); if(cd) cd.onclick=()=>copyTSV("detail");
+  /* Changing role changes what the fold is allowed to read: a viewer's own
+     log is excluded, so the board must be refilled from the folder or it
+     goes blank on the way in. */
+  const roleChanged = async () => {
+    if(FOLDER.state==="connected") await TRACKER.sync(); else TRACKER.fold();
+    renderDataStrip(); render();
+  };
+  const rView=$("#roleViewer");
+  if(rView) rView.onchange=async()=>{
+    FOLDER.setRolePref(rView.checked?"viewer":"auto");
+    await roleChanged();
+  };
+  const rProbe=$("#btnRoleProbe");
+  if(rProbe) rProbe.onclick=async()=>{
+    const w = await FOLDER.probe();
+    await roleChanged();
+    toast(w===false ? "This folder is read-only for you."
+                    : w===true ? "This folder is writable for you." : "No folder connected.");
+  };
   const mr=$("#btnModelReset");
   if(mr) mr.onclick=()=>{
     Object.keys(MODEL_DEFAULTS).forEach(k=>{
@@ -3420,6 +3554,10 @@ function trackBtn(e){
   const on = !!t;
   const ttl = on ? "Tracked — "+esc(t.action)+" · "+esc(TRACK_LABEL[t.status]||t.status)
                  : "Track this MID";
+  /* read-only: still show what the team is tracking, just not a control that
+     would do nothing */
+  if(FOLDER.isViewer())
+    return on ? `<span class="trk on ro" title="${ttl}">✓</span>` : `<span class="trk ph"></span>`;
   return `<button class="trk${on?" on":""}" data-track="${esc(e.id)}" title="${ttl}"
     aria-pressed="${on?"true":"false"}">${on?"✓":"+"}</button>`;
 }
@@ -4449,11 +4587,13 @@ window.__mockFolder = (files) => {
             if((!o||!o.create) && !d.__files[fn]){
               const e=new Error("not found"); e.name="NotFoundError"; throw e;
             }
-            return {async createWritable(){ return {
-              async write(bl){ d.__files[fn]=bl.size;
-                FOLDER.__written={dir:n, name:fn, size:bl.size}; },
-              async close(){}
-            };}};
+            return {async createWritable(){
+              if(self.__ro){ const e=new Error("read-only"); e.name="NotAllowedError"; throw e; }
+              return {
+                async write(bl){ d.__files[fn]=bl.size;
+                  FOLDER.__written={dir:n, name:fn, size:bl.size}; },
+                async close(){}
+              };}};
           }};
       }
       return self.__dirs[n];
@@ -4463,16 +4603,39 @@ window.__mockFolder = (files) => {
       if((!opts||!opts.create) && !self.__files[n]){
         const e=new Error("not found"); e.name="NotFoundError"; throw e;
       }
-      return {async createWritable(){ return {
-        async write(b){ self.__files[n]=b.size; FOLDER.__written={name:n,size:b.size}; },
-        async close(){}
-      };}};
-    }
+      return {async createWritable(){
+        /* a read-only synced drive hands out the handle and refuses the write
+           — exactly the shape probe() has to survive */
+        if(self.__ro){ const e=new Error("read-only"); e.name="NotAllowedError"; throw e; }
+        return {
+          async write(b){ self.__files[n]=b.size; FOLDER.__written={name:n,size:b.size}; },
+          async close(){}
+        };}};
+    },
+    async removeEntry(n){ delete this.__files[n]; },
+    __ro:false
   };
   FOLDER.name="MockReports"; FOLDER.state="connected";
   return loadFromFolder();
 };
 window.__written = () => FOLDER.__written || null;
+window.__mockReadOnly = async on => {
+  if(FOLDER.handle) FOLDER.handle.__ro = !!on;
+  await FOLDER.probe();
+  if(FOLDER.state==="connected") await TRACKER.sync(); else TRACKER.fold();
+  renderDataStrip(); render();
+  return FOLDER.writable;
+};
+window.__folderRole = () => ({writable:FOLDER.writable, pref:FOLDER.rolePref(),
+  viewer:FOLDER.isViewer(), canWrite:FOLDER.canWrite(),
+  probeLeft: FOLDER.handle && FOLDER.handle.__files
+             ? Object.prototype.hasOwnProperty.call(FOLDER.handle.__files, FOLDER.PROBE) : false});
+window.__setRolePref = async v => {
+  FOLDER.setRolePref(v);
+  if(FOLDER.state==="connected") await TRACKER.sync(); else TRACKER.fold();
+  renderDataStrip(); render();
+  return FOLDER.isViewer();
+};
 window.__auditName = () => auditFileName();
 window.__saveToFolder = () => saveCurrentToFolder();
 window.__midTrend = () => {

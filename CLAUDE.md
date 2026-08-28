@@ -286,6 +286,37 @@ of it can move a flag, weight or tier.
   snapshotted at **done** and stored on the event itself, so a verdict cannot
   drift when old reports leave the library.
 
+### Folder roles — read-only is not cosmetic
+
+Added 2026.09.09. `FOLDER` carries a role because the app is client-side
+JavaScript and **enforces nothing**. The shared drive is the gate; this is only
+the mirror.
+
+- `FOLDER.probe()` is the only honest test. Drive, Dropbox and OneDrive all
+  hand out a directory handle for a folder they will then refuse to modify, so
+  a granted `requestPermission` proves nothing. The probe writes
+  `.cbrc-access-check`, deletes it, and caches the result in `FOLDER.writable`.
+  It runs on `pick()`, `restore()` and `grant()` — every connect point.
+- The probe file is a dot-file and invisible to both `scan()` (`.csv` only) and
+  `readTracker()` (`.jsonl` only), so a stranded one can never be read as data.
+- `canWrite()` is optimistic when unprobed (`writable === null`), because
+  guessing read-only would grey out the owner's own controls on first paint.
+  With **no folder connected it returns true** — nothing is shared, so there is
+  nobody to mislead.
+- `TRACKER.push()` is the single chokepoint for every writer (track, untrack,
+  action, note, status) and refuses in viewer mode. **Recording locally would
+  be worse than refusing** — it would show on that board and no other.
+- `fold()` excludes `this.mine` in viewer mode for the same reason. This is
+  why a role change must `sync()` and not merely `fold()`: dropping the local
+  log leaves the board blank until the folder refills it.
+- `writeFile()` and `writeTracker()` both refuse independently. The UI hiding a
+  button is not the guard.
+
+The trap: every one of these failures is **silent**. Nothing throws, nothing
+looks broken, and the person believes the team can see their work. The test at
+`tools/test_tracker.js` step 9 is the only thing standing between that and a
+release — verify it fails when a guard is removed, not just that it passes.
+
 ### Judging whether it worked
 
 Each action type is judged by the metric that would actually move if the fix

@@ -147,6 +147,44 @@ merges. Press **Sync with team** to pull in what others have done.
 Needs Chrome or Edge, like the folder feature it builds on. Without a folder
 the tracker still works, private to that browser.
 
+### One editor, everyone else reads
+
+The audit folder lives in **Google Shared Drives → PaymentHelp → CB Audit
+Location**. Who may write is decided there, not in the app:
+
+| Shared-drive role | Can add exports | Can save audits | Can change the tracker |
+|---|---|---|---|
+| Manager / Content manager | yes | yes | yes |
+| Contributor | yes | yes | yes |
+| **Commenter / Viewer** | no | no | no |
+
+Set yourself Manager and the team **Viewer**, and the drive itself refuses
+their writes — the app cannot be talked around, because the refusal happens in
+the filesystem.
+
+The app then mirrors that. At every connect it writes a throwaway dot-file to
+the folder and deletes it; if that write is refused, the browser switches to
+read-only:
+
+- the folder strip says **View only** and drops **Save audit**
+- tracker rows show action and status as plain text, with no dropdown, no
+  status buttons, no Remove
+- the `+` on audit rows disappears; a green tick still marks tracked MIDs
+- **Refresh from team** still pulls everything the team has done
+
+This matters more than it sounds. Without it a viewer's clicks land in their
+own browser storage, fold into their own board, and look exactly like a change
+the team can see — while reaching nobody. Read-only has to *look* read-only.
+
+**Settings → This browser's folder access** shows what was detected, offers a
+**Re-check** after a permission change, and has a **Stay read-only in this
+browser** box for a machine that could write but shouldn't.
+
+A caveat on Google's model: inside a shared drive, sharing a folder can only
+*widen* someone's access, never narrow it. If your team are Content managers on
+**PaymentHelp** as a whole, you cannot make this one folder read-only for them
+— move it to its own shared drive where they are Viewers.
+
 **Copy** and **Download CSV** on the Tracker tab give you the workbook layout
 you already use — the same first 20 columns, plus Status, Done on, Measured by,
 Baseline, Now, Verdict and Days since. MIDs now export as text, so Excel stops

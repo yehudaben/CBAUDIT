@@ -248,6 +248,96 @@ const base = o => Object.assign(
     return {cols: set.head.length, order: set.head.join('|')};
   });
 
+  /* ---- 9. read-only folder: the viewer role ----
+     A teammate with view-only access to the shared drive must get a board
+     that cannot be edited, not one whose edits vanish. The failure this
+     guards is silent: without it every click is recorded locally, folds into
+     that person's own view, and reaches nobody.
+
+     Step 4c left FOLDER.handle as a bare stub, so this installs a handle of
+     its own — one that hands out a file handle and then refuses the write,
+     which is exactly how a read-only synced drive behaves. */
+  R.readOnly = await page.evaluate(async (mids) => {
+    const [FAT] = mids;
+    const out = {}, files = {}, tfiles = {};
+    const H = {
+      __ro: false, __files: {},
+      async getFileHandle(n, o){
+        const self = this;
+        if ((!o || !o.create) && !(n in self.__files)) {
+          const e = new Error('not found'); e.name = 'NotFoundError'; throw e;
+        }
+        return {async createWritable(){
+          if (self.__ro) { const e = new Error('read-only'); e.name = 'NotAllowedError'; throw e; }
+          return {async write(b){ self.__files[n] = b.size || 0; files[n] = 1; },
+                  async close(){}};
+        }};
+      },
+      async removeEntry(n){ delete this.__files[n]; }
+    };
+    FOLDER.handle = H; FOLDER.state = 'connected'; FOLDER.name = 'TestFolder';
+    FOLDER.writeTracker = async (n, x) => {
+      if (!FOLDER.canWrite()) throw new Error('read-only');
+      tfiles[n] = x; return n;
+    };
+    FOLDER.readTracker = async () => Object.keys(tfiles).map(n => ({name: n, text: tfiles[n]}));
+
+    /* writable to begin with, with one row the team can see */
+    await window.__mockReadOnly(false);
+    TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0; TRACKER.fold();
+    window.__track(FAT, 'Watch');
+    out.ownerCanTrack = !!window.__tracker().rows.find(r => r.mid === FAT);
+    out.ownerRole     = window.__folderRole();
+
+    /* the drive goes read-only under us — exactly the teammate's case */
+    const w = await window.__mockReadOnly(true);
+    out.probeDetects   = (w === false);
+    out.viewerRole     = window.__folderRole();
+    out.probeCleanedUp = !window.__folderRole().probeLeft;
+    out.teamRowVisible = !!window.__tracker().rows.find(r => r.mid === FAT);
+
+    /* every writer must refuse, and refuse rather than record locally */
+    const before = window.__trackerEvents().length;
+    window.__trackStatus(FAT, 'doing');
+    window.__trackAction(FAT, 'Agent Flag');
+    window.__untrack(FAT);
+    out.eventsAdded     = window.__trackerEvents().length - before;
+    out.statusUnchanged = (window.__tracker().rows.find(r => r.mid === FAT) || {}).status;
+
+    /* the controls that would do nothing are not rendered */
+    window.__setView('tracker');
+    out.statusButtons  = document.querySelectorAll('[data-status-for]').length;
+    out.actionSelects  = document.querySelectorAll('[data-action-for]').length;
+    out.removeButtons  = document.querySelectorAll('[data-untrack]').length;
+    out.trackButtons   = document.querySelectorAll('[data-track]').length;
+    out.readOnlyLabels = document.querySelectorAll('.trkro, .trkst.ro').length;
+    out.stripButtons   = window.__strip().buttons;
+    out.badge          = !!document.querySelector('.robadge');
+
+    /* refused at the FOLDER layer too, not merely hidden in the UI. Tested
+       against writeFile directly: saveCurrentToFolder catches and toasts. */
+    try { await FOLDER.writeFile('x.csv', 'a'); out.saveThrew = false; }
+    catch (e) { out.saveThrew = /read-only/i.test(e.message); }
+
+    /* back to writable: controls return and writing works again */
+    await window.__mockReadOnly(false);
+    window.__setView('tracker');
+    out.controlsReturn = document.querySelectorAll('[data-status-for]').length > 0;
+    const b2 = window.__trackerEvents().length;
+    window.__trackStatus(FAT, 'doing');
+    out.writesResume = window.__trackerEvents().length - b2;
+
+    /* the explicit override: a browser that CAN write choosing not to */
+    await window.__setRolePref('viewer');
+    out.forcedViewer = window.__folderRole().viewer;
+    const b3 = window.__trackerEvents().length;
+    window.__trackStatus(FAT, 'done');
+    out.forcedBlocks = window.__trackerEvents().length - b3;
+    await window.__setRolePref('auto');
+    out.restored = !window.__folderRole().viewer;
+    return out;
+  }, [M_FAT]);
+
   R.finalErrors = errs.slice(R.bootErrors.length + R.afterLoadErrors.length);
   console.log(JSON.stringify(R, null, 2));
 
@@ -312,6 +402,34 @@ const base = o => Object.assign(
   want(R.auditExportUnchanged.order ===
        'Tier|Flags|Primary|Action|Bucket|Merchant|DBA|MID|# Sales|$ Sales|CB #|CB Volume|CB %|$ Refunds|Refund %|MC|Visa|# RDR|RDR Coverage %|Amex|Disc',
        'the audit export order must not drift');
+
+  const RO = R.readOnly;
+  want(RO.ownerCanTrack, 'an owner must be able to track');
+  want(RO.ownerRole.writable === true && RO.ownerRole.viewer === false,
+       'a writable folder must read as owner, got ' + JSON.stringify(RO.ownerRole));
+  want(RO.probeDetects, 'probe must detect a folder that hands out a handle then refuses the write');
+  want(RO.viewerRole.viewer === true && RO.viewerRole.canWrite === false,
+       'a read-only folder must read as viewer, got ' + JSON.stringify(RO.viewerRole));
+  want(RO.probeCleanedUp, 'the probe file must never be left behind in a shared folder');
+  want(RO.teamRowVisible, 'a viewer must still see what the team is tracking');
+  want(RO.eventsAdded === 0,
+       'a viewer must record nothing locally, got ' + RO.eventsAdded + ' events');
+  want(RO.statusUnchanged === 'required',
+       'a viewer click must not change the folded state, got ' + RO.statusUnchanged);
+  want(RO.statusButtons === 0, 'no status buttons in read-only, got ' + RO.statusButtons);
+  want(RO.actionSelects === 0, 'no action dropdowns in read-only, got ' + RO.actionSelects);
+  want(RO.removeButtons === 0, 'no remove buttons in read-only, got ' + RO.removeButtons);
+  want(RO.trackButtons === 0, 'no + track buttons in read-only, got ' + RO.trackButtons);
+  want(RO.readOnlyLabels > 0, 'read-only rows must still show action and status as text');
+  want(RO.stripButtons.indexOf('Save audit') < 0,
+       'Save audit must be hidden in read-only, got ' + JSON.stringify(RO.stripButtons));
+  want(RO.badge, 'the folder strip must say View only');
+  want(RO.saveThrew, 'FOLDER.writeFile must refuse a read-only folder, not just hide the button');
+  want(RO.controlsReturn, 'controls must return when write access returns');
+  want(RO.writesResume === 1, 'writing must resume, got ' + RO.writesResume + ' events');
+  want(RO.forcedViewer, 'the explicit override must force read-only on a writable folder');
+  want(RO.forcedBlocks === 0, 'the forced viewer must record nothing, got ' + RO.forcedBlocks);
+  want(RO.restored, 'clearing the override must restore write access');
 
   console.log('\ntracker assertions        : ' + (fail.length ? fail.length + ' FAILED' : '0 failures'));
   fail.forEach(f => console.log('  FAIL  ' + f));
