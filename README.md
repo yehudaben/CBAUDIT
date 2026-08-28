@@ -1,7 +1,8 @@
 # Chargeback Risk Console — site repo
 
-The deployed website is everything in `public/`. Cloudflare Pages watches this
-repo: **a commit to `main` is a deployment.** Nothing else to run.
+The deployed website is everything in `public/`. A Cloudflare Worker serves it
+as static assets and watches this repo: **a commit to `main` is a deployment.**
+Nothing else to run. Live at `cb.yehuda-ceb.workers.dev`.
 
 ```
 public/index.html     the console itself — one self-contained file, this IS the app
@@ -53,31 +54,35 @@ ever edit the version by hand.
 
 Two ways, either is fine:
 
-- **Cloudflare:** your project → **Deployments** → find the last good one →
-  **Rollback to this deployment**. Instant, no repo changes.
+- **Cloudflare:** your Worker → **Deployments** → find the last good version →
+  roll back to it. Instant, no repo changes.
 - **Git:** `git revert <bad commit> && git push`. Slower but the repo stays
   honest about what happened.
 
 ---
 
-## First-time setup
+## How it is hosted
 
-Already done if the site is live. Recorded here so it can be rebuilt.
+This is a **Workers static-assets** project, not Pages. Instructions written
+for Pages will not match what you see in the dashboard.
 
-**Cloudflare build settings** (project → Settings → Build):
-
-| Setting | Value |
+| | |
 |---|---|
-| Framework preset | None |
-| Build command | *(leave blank)* |
-| Build output directory | `public` |
-| Production branch | `main` |
+| Serves | everything in `public/`, as static assets |
+| Production branch | `main` — a push deploys |
+| Build command | none; there is no build step |
+| `public/_headers` | honoured (verified live: `/version.json` comes back `no-store`) |
 
-**Important:** a Pages project is either Git-connected or Direct Upload, and
-they are not interchangeable — Cloudflare's docs are explicit that a
-Git-connected project cannot be switched to Direct Upload later, and there is
-no supported path the other way either. If a drag-and-drop project already
-exists, create a **new** project via *Connect to Git* and delete the old one.
+**There is no `wrangler.toml` in this repo.** The build and asset configuration
+lives in the Cloudflare dashboard, which means it is *not* reproducible from
+git — if the project is ever deleted, those settings have to be re-entered by
+hand. Read them off the dashboard before you touch anything there.
+
+One Workers-specific behaviour that has already tripped a check: requesting
+`/index.html` returns a **307** to `/`. Ask for `/`, not `/index.html`, when
+you curl the live site — `tools/verify.sh` fetches `$BASE_URL/index.html`,
+which is correct against the local `serve.sh` but comes back empty against the
+Worker.
 
 ---
 
@@ -133,10 +138,10 @@ If you want per-person logins: **Zero Trust** → **Access** → **Applications*
 → **Add an application** → **Self-hosted**. Set the domain to the bare
 hostname and add a policy of **Allow / Include → Emails**.
 
-Watch the wildcard: Cloudflare may prefill `*.<project>.pages.dev`, which
-covers *preview* deployments only. Delete the `*.` or production stays open
-while the sign-in screen appears to work. Test in a private window before
-sending anyone the link.
+Watch the wildcard: if the dashboard prefills a `*.` form of the hostname, that
+covers *preview* URLs only. Delete the `*.` and set the bare production
+hostname, or production stays open while the sign-in screen appears to work.
+Test in a private window before sending anyone the link.
 
 ---
 

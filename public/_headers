@@ -1,4 +1,4 @@
-# Netlify / Cloudflare Pages cache rules.
+# Cache rules for Cloudflare Workers static assets.
 #
 # The whole point: index.html and version.json must NEVER be served from
 # cache without checking the server first, or users will sit on an old

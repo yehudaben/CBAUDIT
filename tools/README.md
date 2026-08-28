@@ -28,7 +28,10 @@ BASE_URL=http://127.0.0.1:8111 ./tools/verify.sh
 ```
 
 `verify.sh` prints the version string of the **served** build next to the one
-in the file and tells you they must match. Check it. A stale server on the same
+in the file and tells you they must match. Check it. Note that it fetches
+`$BASE_URL/index.html`, which is right for `serve.sh` but **not** for the live
+Worker — `cb.yehuda-ceb.workers.dev/index.html` 307s to `/` and the version
+line comes back empty. Point `BASE_URL` at the local server. A stale server on the same
 port will answer with an old build and every test below will pass against the
 wrong artifact — this has actually happened.
 
