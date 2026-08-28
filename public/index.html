@@ -502,26 +502,23 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .bkt{font-size:var(--fs-xs);color:var(--ink2);background:var(--wash2);
   padding:1.5px 6px;border-radius:var(--r-sm);white-space:nowrap}
 
-/* ---- report list: one line per export, grouped by month ---- */
-.replist{border:1px solid var(--grid);border-radius:var(--r-sm);
-  background:var(--surface);overflow:hidden;margin-top:calc(8px*var(--d))}
-.rmonth{display:flex;gap:8px;align-items:baseline;padding:calc(5px*var(--d)) calc(11px*var(--d));
-  background:var(--wash);border-bottom:1px solid var(--grid);
-  font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
-.rmonth span{color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0}
-.rrow{display:grid;grid-template-columns:minmax(140px,1.6fr) repeat(6,minmax(0,1fr));
-  gap:calc(6px*var(--d));align-items:baseline;
-  padding:calc(6px*var(--d)) calc(11px*var(--d));border-top:1px solid var(--grid)}
-.rmonth + .rrow{border-top:none}
-.rrow .rd{font-weight:600;font-variant-numeric:tabular-nums}
-.rrow .rv{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-.rrow .rv small{color:var(--muted);font-size:var(--fs-xs);margin-left:4px;font-weight:400}
-.rmore{margin-top:calc(6px*var(--d))}
-@media (max-width:760px){
-  .rrow{grid-template-columns:1fr 1fr 1fr}
-  .rrow .rd{grid-column:1/-1}
-  .rrow .rv{text-align:left}
-}
+/* ---- the picked report: one fixed-height readout, never a growing list ---- */
+svg.pickable{cursor:pointer}
+svg.pickable .hit{fill:transparent}
+svg.pickable:hover .hit:hover{fill:currentColor;fill-opacity:.06}
+.rpick{display:flex;gap:calc(9px*var(--d));align-items:baseline;flex-wrap:wrap;
+  border:1px solid var(--grid);border-radius:var(--r-sm);background:var(--surface);
+  padding:calc(7px*var(--d)) calc(11px*var(--d));margin-top:calc(8px*var(--d))}
+.rpick .rd{font-weight:700;font-variant-numeric:tabular-nums}
+.rpick .rwhen{font-size:var(--fs-xs);color:var(--muted)}
+.rpick .rsp{flex:1}
+.rpick .rv{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.rpick .rv small{color:var(--muted);font-size:var(--fs-xs);margin-left:4px;font-weight:400}
+.rnav{background:var(--surface);border:1px solid var(--axis);border-radius:var(--r-sm);
+  color:var(--ink2);cursor:pointer;padding:2px calc(8px*var(--d));line-height:1.3}
+.rnav:hover:not(:disabled){color:var(--ink);border-color:var(--ink)}
+.rnav:disabled{opacity:.35;cursor:default}
+.rhint{font-size:var(--fs-xs);color:var(--muted);margin-top:calc(4px*var(--d))}
 
 /* a rule where one metric group ends and the next begins, so a dense row
    of sparklines and deltas separates for the eye */
@@ -827,7 +824,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.07";
+const APP_VERSION   = "2026.09.08";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1621,6 +1618,9 @@ function periodsInLib(){
 }
 
 function addSnapshot(snap){
+  /* the trend scrubber points at an index in the report series; adding one
+     shifts what that index means, so fall back to "newest" */
+  VIEW.repSel = null;
   const stamp = snap.stamp || null;
   const id = (stamp || snap.name || "snap") + "|" + snap.rows.length;
   const existing = LIB.findIndex(s=>s.id===id);
@@ -1682,12 +1682,29 @@ function sparkSVG(vals, opts){
     thrLine=`<line x1="2" x2="98" y1="${y}" y2="${y}" stroke="var(--crit)"
       stroke-width="1" stroke-dasharray="3 2" opacity=".65"></line>`;
   }
-  return `<svg viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true">
+  /* o.pick turns the line into a scrubber: one hit slice per report, and the
+     marker moves to the selected one instead of pinning to the last. The
+     figures for whichever point is picked are read out below the tiles, so a
+     folder of 400 exports still costs the same height as a folder of four. */
+  let picker = "", marker = `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}"
+      r="2.6" fill="${col}" stroke="var(--surface)" stroke-width="1.5"></circle>`;
+  if(o.pick){
+    const w = 96/(n-1);
+    picker = clean.map((v,i)=>`<rect class="hit" data-rep="${i}" x="${(2+i*w-w/2).toFixed(1)}"
+      y="0" width="${w.toFixed(1)}" height="38"></rect>`).join("");
+    const si = Math.min(Math.max(o.sel==null?n-1:o.sel, 0), n-1);
+    const sp = clean[si]==null ? null : [(si/(n-1))*96+2, 34-((clean[si]-min)/span)*30];
+    marker = sp ? `<line x1="${sp[0].toFixed(1)}" x2="${sp[0].toFixed(1)}" y1="0" y2="38"
+        stroke="var(--axis)" stroke-width="1" opacity=".8"></line>
+      <circle cx="${sp[0].toFixed(1)}" cy="${sp[1].toFixed(1)}" r="3.2" fill="${col}"
+        stroke="var(--surface)" stroke-width="1.5"></circle>` : "";
+  }
+  return `<svg viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true"
+      class="${o.pick?"pickable":""}">
     ${thrLine}
     <path d="${path}" fill="none" stroke="${col}" stroke-width="2"
       stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
-    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${col}"
-      stroke="var(--surface)" stroke-width="1.5"></circle>
+    ${marker}${picker}
   </svg>`;
 }
 /* arrows read as risk, not direction: invertGood flips which way is bad
@@ -3198,8 +3215,15 @@ function wireViews(){
     downloadText(name, "\uFEFF"+toCSV(set));
     toast(`Downloaded ${name} — ${set.rows.length} row${set.rows.length===1?"":"s"}.`);
   };
-  const rall=$("#btnRepAll");
-  if(rall) rall.onclick=()=>{ VIEW.repAll=!VIEW.repAll; render(); };
+  const nRep = LIB.length;
+  const pick = i => { VIEW.repSel = Math.min(Math.max(i,0), nRep-1); render(); };
+  document.querySelectorAll("svg.pickable .hit").forEach(r=>{
+    r.onclick = () => pick(+r.getAttribute("data-rep"));
+  });
+  const rp=$("#repPrev"), rn=$("#repNext");
+  const curSel = () => VIEW.repSel==null ? nRep-1 : VIEW.repSel;
+  if(rp) rp.onclick=()=>pick(curSel()-1);
+  if(rn) rn.onclick=()=>pick(curSel()+1);
   document.querySelectorAll("[data-lvl]").forEach(b=>{
     b.onclick=()=>{ MT.level=b.getAttribute("data-lvl"); MT.sel=null; render(); };
   });
@@ -3275,16 +3299,21 @@ function portfolioTrendHTML(){
     {lab:"Transactions per CB", get:x=>{
        const t=sumOf(x,"s"), c=sumOf(x,"cb"); return c>0 ? t/c : null; }, good:true, dp:0}
   ];
+  /* which report the tiles are reading. Defaults to the newest; clicking any
+     sparkline moves every tile and the readout to that report at once. */
+  const sel  = Math.min(Math.max(VIEW.repSel==null ? ser.length-1 : VIEW.repSel, 0), ser.length-1);
+  const at   = ser[sel], before = sel>0 ? ser[sel-1] : null;
+  const selSame = !!(before && sp[sel] && sp[sel]===sp[sel-1]);
   const cards = met.map(m=>{
     const vals = ser.map(m.get);
-    const cur = m.get(last), pv = prev ? m.get(prev) : null;
+    const cur = m.get(at), pv = before ? m.get(before) : null;
     const shown = cur==null ? "not available"
       : Number(cur).toLocaleString("en-US",{maximumFractionDigits:m.dp||0});
     return `<div class="spark"><div class="lab">${esc(m.lab)}</div>
-      <div class="now">${shown}</div>${sameMonth
+      <div class="now">${shown}</div>${selSame
         ? deltaTag(cur,pv,m.good)
         : `<span class="dlt flat" title="The previous report is from another month, and the portal zeroed every counter in between">new month</span>`}
-      ${sparkSVG(vals,{breaks:brk})}</div>`;
+      ${sparkSVG(vals,{breaks:brk, pick:true, sel})}</div>`;
   }).join("");
   return `<h2 id="s-trend">Portfolio trend
       <span class="n">${ser.length} report${ser.length===1?"":"s"}</span>
@@ -3292,46 +3321,37 @@ function portfolioTrendHTML(){
     ${ser.length<2 ? `<p class="lede">Load more reports — or connect a folder of them —
       and these fill in.</p>` : ""}
     <div class="trend">${cards}</div>
-    ${reportListHTML(ser)}`;
+    ${reportPickerHTML(ser, sel)}`;
 }
 
-/* ---------- the report list ----------
-   A folder of daily exports grows without limit, so this is one line per
-   report rather than a ten-column table: grouped by month, because the
-   counters zero at each boundary and figures either side are not comparable;
-   newest first; and capped, because the last handful is what gets read. */
-const REPLIST_CAP = 8;
-function reportListHTML(ser){
-  const rows = ser.slice().reverse();
-  const all  = VIEW.repAll || rows.length <= REPLIST_CAP;
-  const show = all ? rows : rows.slice(0, REPLIST_CAP);
-  let month = null;
-  const lines = show.map(x=>{
-    const n   = niceStamp(x.snap.stamp);
-    const per = periodOf(x.snap.stamp);
-    const tot = x.A.E.reduce((a,e)=>a+e.s,0), cb = x.A.E.reduce((a,e)=>a+e.cb,0);
-    let head = "";
-    if(per !== month){
-      month = per;
-      const inMonth = rows.filter(y=>periodOf(y.snap.stamp)===per).length;
-      head = `<div class="rmonth">${esc(periodLabel(per))}
-        <span>${inMonth} report${inMonth===1?"":"s"}</span></div>`;
-    }
-    return head + `<div class="rrow">
-      <span class="rd">${n?esc(n.full):esc(x.snap.name)}</span>
-      <span class="rv">${fmtN(x.A.total)}<small>MIDs</small></span>
-      <span class="rv">${x.A.crit.length}<small>act</small></span>
-      <span class="rv">${x.A.ranked.length+x.A.quar.length}<small>flagged</small></span>
-      <span class="rv">${fmtN(x.A.integ.length)}<small>integrity</small></span>
-      <span class="rv">${cb.toLocaleString("en-US")}<small>CB</small></span>
-      <span class="rv">${tot>0?(cb/tot*100).toFixed(3)+"%":"n/a"}<small>CB %</small></span>
-    </div>`;
-  }).join("");
-  const more = rows.length > REPLIST_CAP
-    ? `<button class="btn rmore" id="btnRepAll">${all
-        ? `Show the latest ${REPLIST_CAP}` : `Show all ${rows.length} reports`}</button>`
-    : "";
-  return `<div class="replist">${lines}</div>${more}`;
+/* ---------- the picked report ----------
+   A list of every export grows without limit, and it only ever restated the
+   sparklines above it as text. Instead: the lines are the list, and this reads
+   out whichever point is picked. Fixed height at four reports or four hundred. */
+function reportPickerHTML(ser, sel){
+  const x   = ser[sel];
+  if(!x) return "";
+  const n   = niceStamp(x.snap.stamp);
+  const per = periodOf(x.snap.stamp);
+  const inMonth = ser.filter(y=>periodOf(y.snap.stamp)===per).length;
+  const idxInMonth = ser.filter((y,i)=>i<=sel && periodOf(y.snap.stamp)===per).length;
+  const tot = x.A.E.reduce((a,e)=>a+e.s,0), cb = x.A.E.reduce((a,e)=>a+e.cb,0);
+  const fig = (v,l)=>`<span class="rv">${v}<small>${l}</small></span>`;
+  return `<div class="rpick">
+    <button class="rnav" id="repPrev" ${sel<=0?"disabled":""} title="Earlier report">&#9664;</button>
+    <span class="rd">${n?esc(n.full):esc(x.snap.name)}</span>
+    <span class="rwhen">${esc(periodLabel(per))} · report ${idxInMonth} of ${inMonth}</span>
+    <span class="rsp"></span>
+    ${fig(fmtN(x.A.total),"MIDs")}
+    ${fig(x.A.crit.length,"act")}
+    ${fig(x.A.ranked.length+x.A.quar.length,"flagged")}
+    ${fig(fmtN(x.A.integ.length),"integrity")}
+    ${fig(cb.toLocaleString("en-US"),"CB")}
+    ${fig(tot>0?(cb/tot*100).toFixed(3)+"%":"n/a","CB %")}
+    <button class="rnav" id="repNext" ${sel>=ser.length-1?"disabled":""} title="Later report">&#9654;</button>
+  </div>
+  <div class="rhint">${ser.length} report${ser.length===1?"":"s"} loaded${ser.length>1
+    ? " · click any line above, or use the arrows, to read a different one" : ""}</div>`;
 }
 
 /* ---------- section nav + scroll affordances ---------- */

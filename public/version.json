@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.07",
+  "version": "2026.09.08",
   "model": "m1.0",
-  "notes": "Trends: five headline figures, a compact month-grouped report list, and rules between the metric groups."
+  "notes": "The report list is gone: the sparklines are now scrubbable and one readout line shows whichever report you pick."
 }

@@ -336,11 +336,15 @@ Rewritten 2026.09.07 to the user's spec.
   **`null` the direction carries no judgement**. `deltaTag()` renders `null` as
   a neutral grey. Total MIDs uses it: a MID count moving is not good or bad and
   colouring it would assert something untrue.
-- **The report list is `reportListHTML()`, not a table.** A folder of daily
-  exports grows without limit, so it is one line per report, newest first,
-  grouped by month — the counters zero at each boundary and figures either side
-  are not comparable — and capped at `REPLIST_CAP` (8) with a show-all toggle
-  on `VIEW.repAll`. It replaced a ten-column table.
+- **There is no report list.** A ten-column table was tried, then a compact
+  month-grouped list; both were the same mistake — restating in text what the
+  sparklines above already draw. The lines *are* the list: `sparkSVG` takes
+  `pick:true` and renders one invisible hit slice per report, and
+  `reportPickerHTML()` reads out whichever point is picked, with ◀ ▶ to step.
+  Picking in any tile moves all five and the readout together, via
+  `VIEW.repSel`. **The footprint is fixed** — four reports or four hundred cost
+  the same height, which is the whole point. `addSnapshot()` resets `repSel`,
+  because adding a report changes what an index means.
 - `table.mt` marks the first cell of each metric group with `.grpstart`, which
   draws the rule separating one sparkline-plus-delta group from the last.
 
