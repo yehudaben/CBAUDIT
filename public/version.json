@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.06",
+  "version": "2026.09.07",
   "model": "m1.0",
-  "notes": "Removes dead code left by the recent redesigns. No behaviour or visual change."
+  "notes": "Trends: five headline figures, a compact month-grouped report list, and rules between the metric groups."
 }

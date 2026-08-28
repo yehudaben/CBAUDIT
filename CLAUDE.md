@@ -325,6 +325,25 @@ The tracker export is **27 columns**: the workbook's own first 20, unchanged,
 then Status, Done on, Measured by, Baseline, Now, Verdict, Days since. It is a
 separate export — the 21-column audit export is untouched by all of it.
 
+## The Trends page
+
+Rewritten 2026.09.07 to the user's spec.
+
+- **Five headline figures**, defined in `met` inside `portfolioTrendHTML()`:
+  total chargebacks, total flagged, total MIDs, total RDR, and transactions per
+  chargeback (`Σ# Sales ÷ ΣCB #`, the inverse of the portfolio rate).
+- Each carries `good:` — `false` rising is worse, `true` rising is better,
+  **`null` the direction carries no judgement**. `deltaTag()` renders `null` as
+  a neutral grey. Total MIDs uses it: a MID count moving is not good or bad and
+  colouring it would assert something untrue.
+- **The report list is `reportListHTML()`, not a table.** A folder of daily
+  exports grows without limit, so it is one line per report, newest first,
+  grouped by month — the counters zero at each boundary and figures either side
+  are not comparable — and capped at `REPLIST_CAP` (8) with a show-all toggle
+  on `VIEW.repAll`. It replaced a ten-column table.
+- `table.mt` marks the first cell of each metric group with `.grpstart`, which
+  draws the rule separating one sparkline-plus-delta group from the last.
+
 ## Per-user data model
 
 Nothing is shared between users and nothing reaches a server, with one
