@@ -111,6 +111,47 @@ const base = o => Object.assign(
     return out;
   }, [M_FAT, M_THIN, M_APEX, OLD, NEW, FUT]);
 
+  /* ---- 4b. local edits stay visible once a folder sync has run ----
+     Regression: fold() read this.all *instead of* this.mine, so after a sync
+     every local change was recorded but invisible until reload. The + button
+     did not tick and the status buttons and action dropdown looked dead. */
+  R.liveAfterSync = await page.evaluate(a => {
+    const [FAT, THIN, APEX] = a;
+    /* start clean, then stand in a teammate's event as a sync would */
+    window.__trackInject([]);
+    TRACKER.all = [{id: 'team-1', ts: '2026-08-01T10:00:00Z', dev: 'other',
+                    mid: FAT, op: 'track', action: 'Watch'}];
+    TRACKER.fold(); render();
+
+    /* every lookup is guarded: when this regresses the controls are simply
+       absent, and a named assertion is more use than a null-pointer crash */
+    const q = sel => document.querySelector(sel);
+    const btn = q(`[data-track="${APEX}"]`);
+    const beforeTick = btn ? btn.classList.contains('on') : null;
+    if (btn) btn.click();
+    const after = q(`[data-track="${APEX}"]`);
+    const ticked = !!after && after.classList.contains('on') && after.textContent.trim() === '\u2713';
+
+    window.__setView('tracker');
+    const row = () => (window.__tracker().rows.filter(r => r.mid === APEX)[0] || {});
+    const stBtn = q(`[data-status-for="${APEX}"][data-status="doing"]`);
+    if (stBtn) stBtn.click();
+    const status = row().status || null;
+    const lit = q(`[data-status-for="${APEX}"][data-status="doing"]`);
+    const statusLit = !!lit && lit.classList.contains('on');
+
+    const sel = q(`[data-action-for="${APEX}"]`);
+    if (sel) { sel.value = 'MC Fix (Descriptor Lookup)'; sel.dispatchEvent(new Event('change')); }
+    const action = row().action || null;
+    const after2 = q(`[data-action-for="${APEX}"]`);
+    const selShows = after2 ? after2.value : null;
+
+    return {beforeTick, ticked, status, statusLit, action, selShows,
+            controlsFound: {track: !!btn, status: !!stBtn, action: !!sel},
+            teamRowKept: window.__tracker().rows.some(r => r.mid === FAT),
+            buckets: [...document.querySelectorAll('.bkt')].map(n => n.textContent.trim())};
+  }, [M_FAT, M_THIN, M_APEX]);
+
   /* ---- 5. two people, two files, no overwrite ----
      Events from two devices fold into one state, and the later timestamp
      wins the field without erasing the earlier event from the log. */
@@ -198,6 +239,20 @@ const base = o => Object.assign(
   want(v('tooEarly').verdict === 'too-early', 'inside the lag window there is no verdict');
   want(v('noReport').verdict === 'no-report-since', 'a fix newer than the report has nothing to measure');
   want(v('missing').verdict === 'missing', 'a MID absent from the report must say so');
+
+  want(R.liveAfterSync.controlsFound.track, 'the + control was not rendered');
+  want(R.liveAfterSync.controlsFound.status, 'the status buttons were not rendered — the row never appeared');
+  want(R.liveAfterSync.controlsFound.action, 'the action dropdown was not rendered');
+  want(R.liveAfterSync.beforeTick === false, 'the row should start untracked');
+  want(R.liveAfterSync.ticked, 'the + button must tick immediately after a folder sync, without a reload');
+  want(R.liveAfterSync.status === 'doing', 'the status button must move the row after a folder sync');
+  want(R.liveAfterSync.statusLit, 'the clicked status button must show as selected');
+  want(R.liveAfterSync.action === 'MC Fix (Descriptor Lookup)',
+       'the action dropdown must stick after a folder sync');
+  want(R.liveAfterSync.selShows === 'MC Fix (Descriptor Lookup)',
+       'the dropdown must re-render showing the chosen action');
+  want(R.liveAfterSync.teamRowKept, 'a local edit must not drop the team row');
+  want(R.liveAfterSync.buckets.length >= 1, 'tracker rows must show the bucket');
 
   want(R.merge.action === 'MC Fix (Descriptor Lookup)', 'the later action should win the merge');
   want(R.merge.status === 'done', 'the later status should win the merge');

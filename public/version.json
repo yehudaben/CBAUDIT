@@ -1,5 +1,5 @@
 {
-  "version": "2026.08.31",
+  "version": "2026.09.01",
   "model": "m1.0",
-  "notes": "Connecting a folder no longer creates an empty tracker file before you have tracked anything."
+  "notes": "Fixes the tracker not updating until reload once a folder is connected, and shows each deal's bucket."
 }

@@ -528,6 +528,8 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .vd.v-fl{color:var(--muted)}
 .orow .dlt{font-variant-numeric:tabular-nums;font-size:var(--fs-xs);color:var(--muted);margin-left:4px}
 .tile.g .val{color:var(--good)}
+.bkt{font-size:var(--fs-xs);color:var(--ink2);background:var(--wash2);
+  padding:1.5px 6px;border-radius:var(--r-sm);white-space:nowrap}
 
 /* ---- level segmented control ---- */
 .seg{display:inline-flex;border:var(--bw) solid var(--border);border-radius:var(--r-sm);
@@ -777,7 +779,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.08.31";
+const APP_VERSION   = "2026.09.01";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1965,7 +1967,7 @@ const TRACKER = {
       this.all = out;
       this.sources = files.length;
       this.syncedAt = new Date().toISOString();
-      this.fold(true);
+      this.fold();
       await this.flush();
       this.err=null;
       return true;
@@ -1974,9 +1976,16 @@ const TRACKER = {
 
   /* last event per MID wins, ordered by timestamp then id so the fold is
      deterministic when two clocks agree to the millisecond */
-  fold(useAll){
-    const src = (useAll && this.all.length) ? this.all : (this.all.length ? this.all : this.mine);
-    const evs = src.slice().sort((a,b)=>
+  fold(){
+    /* Always union both logs. Reading this.all *instead of* this.mine meant
+       that once a folder sync had populated this.all, every local change was
+       recorded but invisible until a reload cleared it — the + button did not
+       tick, and the status buttons and action dropdown appeared dead. */
+    const seen={}, src=[];
+    const take = e => { if(e && e.id && !seen[e.id]){ seen[e.id]=1; src.push(e); } };
+    this.all.forEach(take);
+    this.mine.forEach(take);
+    const evs = src.sort((a,b)=>
       (trackStampMs(a.ts)||0) - (trackStampMs(b.ts)||0) || String(a.id).localeCompare(String(b.id)));
     const st = {};
     evs.forEach(ev=>{
@@ -2966,6 +2975,7 @@ function trackerRowHTML(t, A){
       <span class="nm">${esc(e?e.m:t.mid)}</span>
       ${e?`<span class="dba">— ${esc(e.d)}</span>`:`<span class="dba">— not in this report</span>`}
       <span class="mid">${esc(t.mid)}</span>
+      ${e&&e.b?`<span class="bkt">${esc(e.b)}</span>`:""}
       ${e?`<span class="pill">${esc(tierOf(e))}</span>`:""}
     </div>
     <div class="tmeta">
@@ -3001,6 +3011,7 @@ function outcomeRowHTML(o, A){
       <span class="nm">${esc(e?e.m:o.mid)}</span>
       ${e?`<span class="dba">— ${esc(e.d)}</span>`:""}
       <span class="mid">${esc(o.mid)}</span>
+      ${e&&e.b?`<span class="bkt">${esc(e.b)}</span>`:""}
       <span class="vd ${v.c}">${esc(v.t)}</span>
     </div>
     <div class="tmeta">
@@ -4337,7 +4348,10 @@ window.__outcomes = ()=>TRACKER.list()
 window.__trackSetLag = d=>{ TRACKER.setLag(d); render(); return TRACKER.lagDays; };
 /* let a test drive the fold directly without touching the folder */
 window.__trackInject = evs => {
-  TRACKER.all = evs.slice(); TRACKER.fold(true); render(); return TRACKER.counts();
+  /* replaces the merged log outright: mine is cleared so a test starts from
+     exactly the events it passed in, and nothing is written to localStorage */
+  TRACKER.all = evs.slice(); TRACKER.mine = [];
+  TRACKER.fold(); render(); return TRACKER.counts();
 };
 window.__lib = () => LIB.map(s=>({id:s.id,name:s.name,stamp:s.stamp,rows:s.rows.length}));
 window.__select = (level,key)=>{ MT.level=level; MT.sel={level,key}; render(); };

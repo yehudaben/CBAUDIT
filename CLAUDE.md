@@ -193,6 +193,14 @@ of it can move a flag, weight or tier.
   and independent of the order files are read in.
 - `FOLDER.scan()` skips subdirectories, so nothing in `tracker/` can be read
   back as a portal export. Same defence as `audits/`.
+- **`fold()` must union `mine` and `all`, never choose between them.** Reading
+  `this.all` *instead of* `this.mine` once a sync had populated it meant every
+  local change was recorded but invisible until a reload — the + button did not
+  tick and the status buttons and action dropdown looked dead. Shipped in
+  2026.08.30, fixed in 2026.09.01, and `test_tracker.js` now fails by name on
+  all three symptoms if it comes back.
+- Nothing is written to the folder until there is a real event, so connecting a
+  folder does not litter an empty `events-*.jsonl` in a shared drive.
 - **Statuses:** `required` → `doing` → `done` → `closed`. The baseline is
   snapshotted at **done** and stored on the event itself, so a verdict cannot
   drift when old reports leave the library.
