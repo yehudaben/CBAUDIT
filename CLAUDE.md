@@ -158,12 +158,27 @@ Sorting moved from the old table headers into the controls bar (`#selSort` and
 `#btnSortDir`) when the tables became cards, and now applies to every tier
 rather than just High and Monitor.
 
-Left unreferenced by those removals, deliberately not deleted: `FLAGDEF` (the
-scoreboard was its only reader), `nfTiers` in `analyse()`, `nPer` in
-`trendsPageHTML()`, the `.headline` / `.mtd` / `.mtdnote` CSS rules, and — since
-the 2026.09.05 card rewrite — `cardHTML()`, `thHTML()` and `triggerFor()`. That
-is now a fair amount of dead weight in one file; worth a deliberate sweep, but
-only as its own change with the suite run after it.
+All of that dead weight was swept in 2026.09.06: `FLAGDEF`, `triggerFor()`,
+`cardHTML()`, `thHTML()`, `nPer`, `nfTiers` (also dropped from
+`tools/audit_dump.js`, which was the only reader), and 23 orphaned CSS rules
+— `.headline*`, `.card*`, `td.mono`, `ul.flat*`.
+
+**Two traps that sweep hit, worth knowing before the next one:**
+
+- `flat` is still very much alive as a modifier on `.dlt` / `.dcell` meaning
+  "no change". Only the `ul.flat` list rules were dead. A class name being
+  unused in one context says nothing about another.
+- `.card,.tile,table,.callout,.chart{break-inside:avoid}` in the `@media print`
+  block was removed because the selector *began* with the dead `.card`. That
+  silently broke page-breaks for tiles, tables, callouts and charts in
+  Print / PDF. Shared selector lists must be edited, not deleted.
+
+The method that worked: prove each symbol has no reference outside its own
+definition, then diff computed styles for ~20 selectors between the swept and
+pre-sweep builds rendered side by side in iframes on the same data. That diff
+came back empty, which is what "no visual change" should mean. Harvesting class
+names from the rendered DOM alone over-reports badly — conditional state
+classes like `v-ok` and `wait` look unused until the state occurs.
 
 Test hooks are exposed on `window.__*` (`__loadForTest`, `__lib`, `__trend`,
 `__exportSet`, `__setView`, `__VERSION`, …). Add one rather than reaching into

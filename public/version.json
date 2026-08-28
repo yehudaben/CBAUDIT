@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.05",
+  "version": "2026.09.06",
   "model": "m1.0",
-  "notes": "One card format for every tier \u2014 twelve figures in fixed places, colour-coded by problem, weight and recommended action."
+  "notes": "Removes dead code left by the recent redesigns. No behaviour or visual change."
 }

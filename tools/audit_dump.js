@@ -25,7 +25,7 @@ const LAUNCH = process.env.CHROMIUM ? {executablePath: process.env.CHROMIUM} : {
       totals: {total:A.total, active:A.active, inert:A.inert, withCB:A.withCB,
                ranked:A.ranked.length, crit:A.crit.length, high:A.high.length,
                mon:A.mon.length, quar:A.quar.length, integ:A.integ.length,
-               flagCounts:A.flagCounts, nfTiers:A.nfTiers, buckets:A.buckets.length},
+               flagCounts:A.flagCounts, buckets:A.buckets.length},
       rows: A.E.map(e=>({
         b:e.b,m:e.m,d:e.d,id:e.id,
         s:e.s,ds:e.ds,dr:e.dr,cb:e.cb,cv:e.cv,rn:e.rn,

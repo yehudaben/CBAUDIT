@@ -89,7 +89,6 @@
   --accent:#3987e5; --gen-ink:#ec835a;
 }
 
-
 /* ===================================================================
    LAYOUT + COMPONENTS — written against tokens only.
    You should rarely need to edit below here to restyle.
@@ -130,8 +129,7 @@ h1{font-size:var(--fs-h1);margin:4px 0 0;letter-spacing:-.02em;font-weight:700}
   white-space:nowrap;cursor:help;vertical-align:1px}
 
 /* ---- build stamp + update banner ---- */
-.headline .mtd{font-weight:700;color:var(--ink2)}
-.headline .mtdnote{font-size:var(--fs-sm);color:var(--ink2)}
+
 .vchip{display:inline-block;margin-left:calc(9px*var(--d));font-size:var(--fs-xs);
   font-weight:700;letter-spacing:.06em;color:var(--muted);border:1px solid var(--grid);
   border-radius:var(--r-pill);padding:1px calc(8px*var(--d));vertical-align:4px;
@@ -176,10 +174,7 @@ h1{font-size:var(--fs-h1);margin:4px 0 0;letter-spacing:-.02em;font-weight:700}
 .hint code{background:var(--wash2);padding:1px 5px;border-radius:4px}
 
 /* ---- headline + tiles ---- */
-.headline{margin:calc(18px*var(--d)) 0 6px;padding:calc(16px*var(--d)) calc(18px*var(--d));
-  background:var(--surface);border:var(--bw) solid var(--border);
-  border-left:var(--rail) solid var(--crit);border-radius:var(--r);
-  font-size:calc(var(--fs) + 1px);line-height:1.5;box-shadow:var(--shadow)}
+
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));
   gap:calc(9px*var(--d));margin:calc(16px*var(--d)) 0 6px}
 .tile{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
@@ -249,21 +244,7 @@ p.lede{color:var(--ink2);font-size:var(--fs-sm);margin:calc(8px*var(--d)) 0 calc
 .d-m{background:var(--warn)}.d-i{background:var(--muted)}
 
 /* ---- cards ---- */
-.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
-  padding:calc(13px*var(--d)) calc(15px*var(--d));margin-bottom:calc(8px*var(--d));
-  border-left:var(--rail) solid var(--crit);box-shadow:var(--shadow)}
-.card.h{border-left-color:var(--serious)}
-.card .r1{display:flex;flex-wrap:wrap;align-items:baseline;gap:calc(7px*var(--d)) calc(9px*var(--d))}
-.card .nm{font-weight:700;font-size:var(--fs)}
-.card .dba{color:var(--ink2);font-size:var(--fs-sm)}
-.card .mid{font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums}
-.card .r2{font-size:var(--fs-xs);color:var(--ink2);margin:5px 0 6px;display:flex;
-  flex-wrap:wrap;gap:4px 7px;align-items:center}
-.card .sc{font-weight:700;color:var(--ink)}
-.card .figs{font-size:var(--fs-sm);font-variant-numeric:tabular-nums;background:var(--wash);
-  border-radius:var(--r-sm);padding:calc(7px*var(--d)) calc(9px*var(--d));line-height:1.65}
-.card .act{font-size:var(--fs-sm);margin-top:calc(7px*var(--d))}
-.card .act .ar{color:var(--crit);font-weight:700;margin-right:5px}
+
 .pill{display:inline-block;font-size:var(--fs-xs);font-weight:700;padding:1.5px 5px;
   border-radius:4px;background:var(--wash2);border:1px solid var(--border);margin-right:3px;
   font-variant-numeric:tabular-nums}
@@ -285,17 +266,8 @@ tr:last-child td{border-bottom:none}
 tbody tr:nth-child(even){background:var(--zebra)}
 tbody tr:hover{background:var(--wash2)}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td.mono{font-variant-numeric:tabular-nums;font-size:var(--fs-xs);color:var(--muted);white-space:nowrap}
-ul.flat{list-style:none;padding:0;margin:4px 0}
-ul.flat li{padding:calc(7px*var(--d)) calc(11px*var(--d));border:var(--bw) solid var(--border);
-  border-top:none;font-size:var(--fs-sm);display:flex;flex-wrap:wrap;gap:3px 9px;
-  align-items:baseline;background:var(--surface)}
-ul.flat li:nth-child(even){background:var(--zebra)}
-ul.flat li:first-child{border-top:var(--bw) solid var(--border);
-  border-radius:var(--r-sm) var(--r-sm) 0 0}
-ul.flat li:last-child{border-radius:0 0 var(--r-sm) var(--r-sm)}
-ul.flat .nm{font-weight:650}ul.flat .dba{color:var(--ink2)}
-ul.flat .tr{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink)}
+
+ul.flat .dba{color:var(--ink2)}
 
 /* ---- callouts + chart ---- */
 .callout{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
@@ -323,7 +295,6 @@ ul.flat .tr{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink)}
 .zm{font-size:var(--fs-xs);color:var(--crit);font-weight:700}
 .note{font-size:var(--fs-xs);color:var(--muted);margin-top:calc(11px*var(--d));line-height:1.6}
 .empty{padding:calc(40px*var(--d)) 20px;text-align:center;color:var(--muted);font-size:var(--fs-sm)}
-
 
 /* ---- snapshot tabs ---- */
 .libbar{display:flex;flex-direction:column;gap:calc(8px*var(--d));
@@ -407,7 +378,6 @@ table.exp th{background:var(--wash2);color:var(--ink)}
 .expwrap{margin-top:calc(8px*var(--d))}
 .expwrap .note{margin-top:calc(8px*var(--d))}
 
-
 /* ---- folder connection ---- */
 .folderbar{display:flex;flex-wrap:wrap;gap:calc(7px*var(--d));align-items:center;
   font-size:var(--fs-xs);color:var(--muted);padding-top:calc(4px*var(--d))}
@@ -426,7 +396,6 @@ table.exp th{background:var(--wash2);color:var(--ink)}
 /* ---- portfolio trend ---- */
 .trend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
   gap:calc(10px*var(--d));margin-bottom:calc(12px*var(--d))}
-
 
 /* ---- per-MID trend table ---- */
 table.mt td{white-space:nowrap;vertical-align:middle}
@@ -460,7 +429,6 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
   border-radius:var(--r-sm);padding:calc(5px*var(--d)) 8px;font-size:var(--fs-sm)}
 .legendrow{display:flex;gap:14px;flex-wrap:wrap;font-size:var(--fs-xs);color:var(--muted);
   margin:calc(6px*var(--d)) 0 calc(10px*var(--d))}
-
 
 /* ---- top-level view switch ---- */
 .views{display:flex;gap:calc(4px*var(--d));align-items:center;flex-wrap:wrap;
@@ -601,7 +569,6 @@ table.mt tbody tr{cursor:pointer}
 table.mt tbody tr.sel{background:var(--wash2)}
 table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
 
-
 /* ---- bucket multi-select ---- */
 .msel{position:relative;display:inline-block}
 .mselbtn{background:var(--page);border:1px solid var(--border);border-radius:var(--r-sm);
@@ -647,7 +614,6 @@ table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
 .chip button{background:none;border:none;color:var(--ink2);font-size:14px;line-height:1;
   padding:0 4px;border-radius:50%}
 .chip button:hover{color:var(--crit);background:var(--wash)}
-
 
 /* ---- settings page ---- */
 .setwrap{display:flex;flex-direction:column;gap:calc(10px*var(--d))}
@@ -701,7 +667,6 @@ table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
   font-size:var(--fs-sm);color:var(--ink2)}
 .onerep b{color:var(--ink)}
 
-
 /* ---- data strip: the single place files are managed ---- */
 .data{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
   padding:calc(12px*var(--d)) calc(14px*var(--d));margin-bottom:calc(14px*var(--d));
@@ -752,7 +717,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
   :root{--fs:14px}
   .wrap{padding:16px 12px 60px}
   .brow{grid-template-columns:112px 1fr 46px}
-  ul.flat .tr{margin-left:0;width:100%}
+
   h2 .cp{margin-left:0}
   .ctrls input[type=search]{max-width:none}
 }
@@ -760,7 +725,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
   .topbar .tools,.loader,.ctrls,details.panel,h2 .cp,.toast,.nav,.top,
   .updbar{display:none}
   body{background:#fff;--shadow:none}
-  .card,.tile,table,.callout,.chart{break-inside:avoid;box-shadow:none}
+  .acard,.tile,table,.callout,.chart{break-inside:avoid;box-shadow:none}
   h2{break-after:avoid}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -837,7 +802,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.05";
+const APP_VERSION   = "2026.09.06";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -901,17 +866,6 @@ const MODEL = {
   tierCrit: 16, tierHigh: 10
 };
 const SEVERITY = ["F5","F1","F3","F4","F2"];
-const FLAGDEF = {
-  F1:["Visa CB ≥ threshold AND (RDR = 0 OR coverage < threshold)","",
-      "Enable RDR or raise the RDR ceiling. Most fixable flag."],
-  F2:["RDR = 0 AND Visa CB > threshold","","Enable RDR immediately."],
-  F3:["MC CB > threshold AND Refund % < threshold","",
-      "Ethoca alerts, refund-policy review, descriptor and fulfillment check."],
-  F4:["Amex CB ≥ threshold OR Discover CB ≥ threshold","",
-      "Merchant-side remediation only."],
-  F5:["CB % > threshold AND CB # ≥ threshold","",
-      "Immediate review, consider reserve or volume cap."]
-};
 const PRIMARY_LABEL = {
   F5:"CB % over ceiling", F1:"Visa disputes not being deflected",
   F3:"Mastercard disputes with thin refunds", F4:"Uncovered Amex/Discover losses",
@@ -1300,8 +1254,6 @@ function analyse(snap){
   const active= E.filter(e=>e.s>0||e.cb>0).length;
   const flagCounts={};
   ["F1","F2","F3","F4","F5"].forEach(f=>flagCounts[f]=E.filter(e=>e.F.indexOf(f)>=0).length);
-  const nfTiers={};
-  [1,2,3,4,5].forEach(k=>nfTiers[k]=E.filter(e=>e.nf>=k).length);
   // buckets
   const bm={};
   E.forEach(e=>{
@@ -1317,7 +1269,7 @@ function analyse(snap){
   const multi = Object.keys(mg).map(k=>({m:k,rows:mg[k]}))
                   .filter(x=>x.rows.length>=2)
                   .sort((a,b)=>b.rows.length-a.rows.length);
-  return {E,ranked,crit,high,mon,quar,integ,active,flagCounts,nfTiers,buckets,multi,
+  return {E,ranked,crit,high,mon,quar,integ,active,flagCounts,buckets,multi,
           total:E.length, inert:E.length-active,
           withCB:E.filter(e=>e.cb>0).length,
           byMid:(function(){const o={};E.forEach(e=>o[e.id]=e);return o;})()};
@@ -1356,18 +1308,6 @@ function actionFor(e){
   if(!bits.length) bits.push("monitor");
   const s=bits.join("; ");
   return s.charAt(0).toUpperCase()+s.slice(1)+".";
-}
-function triggerFor(e){
-  switch(e.pri){
-    case "F5": return `CB ${e.cbp.toFixed(2)}% on ${e.cb} CBs`;
-    case "F1": return `Visa ${e.vi} CBs at ${fmtP(e.cov)} RDR coverage`;
-    case "F3": return `MC ${e.mc} CBs on ${fmtP(e.rfp)} refunds`;
-    case "F4": {
-      const p=[]; if(e.ax>=MODEL.f4Brand)p.push("Amex "+e.ax);
-      if(e.dc>=MODEL.f4Brand)p.push("Disc "+e.dc); return p.join(" / ")+" CBs";
-    }
-    default:  return `Visa ${e.vi} CBs with RDR 0`;
-  }
 }
 
 
@@ -3304,7 +3244,6 @@ function portfolioTrendHTML(){
      delta across that boundary is the reset, not a change in behaviour */
   const sp   = ser.map(x=>periodOf(x.snap.stamp));
   const brk  = {}; sp.forEach((p,i)=>{ if(i>0 && p && sp[i-1] && p!==sp[i-1]) brk[i]=1; });
-  const nPer = [...new Set(sp.filter(Boolean))].length;
   const sameMonth = !!(prev && sp[ser.length-1] && sp[ser.length-1]===sp[ser.length-2]);
   const met = [
     {lab:"Act today", get:x=>x.A.crit.length, dp:0},
@@ -3493,27 +3432,6 @@ function auditCard(e){
   </div>`;
 }
 
-function cardHTML(e, cls){
-  const pills = e.F.map(f=>`<span class="pill">${f}</span>`).join("");
-  const cbpTxt = e.cbp===null ? "<b>no sales — data integrity flag</b>" : `<b>${e.cbp.toFixed(2)}%</b>`;
-  const covTxt = e.cov===null ? "n/a" : e.cov.toFixed(1)+"% cov";
-  const warn = e.bad ? `<div class="act"><span class="ar">⚠</span><b>CB % above 100% — verify the data before acting.</b>
-      Refunds and disputes exceed sales, which points to a reporting or settlement-window error rather than merchant behaviour.</div>` : "";
-  return `<div class="card ${cls||""}">
-    <div class="r1">${trackBtn(e)}<span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
-      <span class="mid">${esc(e.id)}</span></div>
-    <div class="r2"><span class="sc">Weighted ${e.w}</span> · ${pills} ·
-      Primary: ${esc(PRIMARY_LABEL[e.pri]||"—")} · ${esc(e.b)}</div>
-    <div class="figs">
-      CB <b>${e.cb}</b> / ${fmtN(e.s)} sales = ${cbpTxt}${thinTag(e)} &nbsp;·&nbsp;
-      CB volume ${fmtM(e.cv)} &nbsp;·&nbsp; Refunds ${fmtP(e.rfp)} (${fmtM(e.dr)} on ${fmtM(e.ds)})<br>
-      Visa <b>${e.vi}</b>, RDR ${e.rn} (${covTxt}) &nbsp;·&nbsp; MC <b>${e.mc}</b>
-      &nbsp;·&nbsp; Amex <b>${e.ax}</b> &nbsp;·&nbsp; Disc <b>${e.dc}</b>
-    </div>
-    <div class="act"><span class="ar">→</span>${esc(actionFor(e))}</div>${warn}
-  </div>`;
-}
-
 const SORTABLE = [
   {k:"m",   t:"Merchant"}, {k:"d", t:"DBA"}, {k:"b", t:"Bucket"},
   {k:"w",   t:"Wgt", n:1}, {k:"cb", t:"CB #", n:1}, {k:"cbp", t:"CB %", n:1},
@@ -3528,14 +3446,6 @@ function sortRows(rows){
     return dir*(x-y) || (b.cb-a.cb);
   });
 }
-function thHTML(){
-  return SORTABLE.map(c=>{
-    const on = VIEW.sort.key===c.k;
-    const ar = on ? (VIEW.sort.dir<0?"▼":"▲") : "";
-    return `<th class="${c.n?"n":""}" data-sort="${c.k}">${c.t} <span class="ar">${ar}</span></th>`;
-  }).join("");
-}
-
 function finishRender(P, A, V){
   $("#out").innerHTML = P.join("\n");
   wireDesign();
