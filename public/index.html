@@ -1,0 +1,3500 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chargeback Risk Console — Paymenthelp</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%230b0b0b'/%3E%3Cpath d='M12 20 L26 34 L36 26 L52 44' fill='none' stroke='%23d03b3b' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ===================================================================
+   THEME — everything visual lives here. Edit values, reload, done.
+   Nothing below this block needs touching to change appearance.
+
+   Tokens marked  [live]  are also editable from the Design panel in
+   the UI (top-right ◐ Design), which writes them at runtime and can
+   copy a replacement for this block back out.
+   =================================================================== */
+:root{
+  color-scheme:light;
+
+  /* ---- brand + status -------------------------------------------
+     Status colours are intentionally mode-invariant: the same red
+     means "critical" in light and dark. Each is paired with an icon
+     or text label in the UI so colour never carries meaning alone. */
+  --crit:      #d03b3b;   /* [live] act-today, quarantine            */
+  --serious:   #ec835a;   /* [live] high tier                        */
+  --warn:      #fab219;   /* [live] monitor tier, callouts           */
+  --good:      #0ca30c;   /* [live] confirmations, loaded-file names */
+  --accent:    #2a78d6;   /* [live] chart bars, focus rings          */
+
+  /* ---- surfaces + ink (light mode) ------------------------------ */
+  --page:      #f9f9f7;   /* [live] page background                  */
+  --surface:   #fcfcfb;   /* [live] cards, tables, panels            */
+  --ink:       #0b0b0b;   /* [live] primary text                     */
+  --ink2:      #52514e;   /*        secondary text                   */
+  --muted:     #898781;   /*        labels, captions                 */
+  --grid:      #e1e0d9;   /*        hairline rules                   */
+  --axis:      #c3c2b7;   /*        stronger rules, dashed borders   */
+  --border:    rgba(11,11,11,0.10);
+  --wash:      rgba(11,11,11,0.025);   /* subtle row/figure tint     */
+  --wash2:     rgba(11,11,11,0.05);    /* hover, pills               */
+
+  /* ---- type ----------------------------------------------------- */
+  --font:      system-ui,-apple-system,"Segoe UI",sans-serif;  /* [live] */
+  --fs:        15px;      /* [live] base size; everything scales off it */
+  --fs-h1:     1.55rem;
+  --fs-h2:     1.20rem;
+  --fs-h3:     0.90rem;
+  --fs-sm:     0.83rem;
+  --fs-xs:     0.72rem;
+  --lh:        1.5;
+  --tracking-label: .07em;   /* uppercase micro-labels */
+
+  /* ---- shape + density ------------------------------------------
+     --d is a density multiplier applied to padding and gaps.
+     1 = comfortable, 0.72 = compact. The Design panel sets it. */
+  --d:         1;          /* [live] */
+  --r-sm:      6px;
+  --r:         10px;       /* [live] card / panel radius             */
+  --r-pill:    20px;
+  --bw:        1px;        /* [live] card + table border weight      */
+  --rail:      4px;        /* [live] coloured left rail on cards     */
+  --maxw:      1240px;     /* [live] content width                   */
+  --shadow:    none;       /* [live] e.g. 0 1px 2px rgba(0,0,0,.05)  */
+
+  /* ---- table ---------------------------------------------------- */
+  --zebra:     transparent;  /* [live] set to var(--wash) for stripes */
+  --th-bg:     var(--surface);
+}
+
+/* ---- dark mode -------------------------------------------------
+   Steps chosen for the dark surface rather than inverted, so
+   contrast holds. Status colours deliberately unchanged.        */
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+  color-scheme:dark;
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7;
+  --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+  --border:rgba(255,255,255,0.10);
+  --wash:rgba(255,255,255,0.03); --wash2:rgba(255,255,255,0.07);
+  --accent:#3987e5;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7;
+  --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+  --border:rgba(255,255,255,0.10);
+  --wash:rgba(255,255,255,0.03); --wash2:rgba(255,255,255,0.07);
+  --accent:#3987e5;
+}
+
+
+/* ===================================================================
+   LAYOUT + COMPONENTS — written against tokens only.
+   You should rarely need to edit below here to restyle.
+   =================================================================== */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--page);color:var(--ink);
+  font-family:var(--font);font-size:var(--fs);line-height:var(--lh);
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;
+  padding:calc(26px*var(--d)) calc(22px*var(--d)) calc(90px*var(--d))}
+button,select,input{font-family:inherit;font-size:var(--fs-sm);color:var(--ink)}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+a{color:var(--accent)}
+
+/* ---- header ---- */
+.topbar{display:flex;flex-wrap:wrap;gap:calc(10px*var(--d));align-items:center;
+  justify-content:space-between;border-bottom:2px solid var(--ink);
+  padding-bottom:calc(14px*var(--d));margin-bottom:calc(18px*var(--d))}
+.kick{font-size:var(--fs-xs);letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+h1{font-size:var(--fs-h1);margin:4px 0 0;letter-spacing:-.02em;font-weight:700}
+.tools{display:flex;gap:calc(7px*var(--d));flex-wrap:wrap;align-items:center}
+.btn{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r-sm);
+  padding:calc(7px*var(--d)) calc(12px*var(--d));font-weight:600;color:var(--ink);
+  white-space:nowrap;box-shadow:var(--shadow)}
+.btn:hover{background:var(--wash2)}
+.btn.p{background:var(--ink);color:var(--page);border-color:var(--ink)}
+.btn.p:hover{opacity:.87}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sm{padding:calc(4px*var(--d)) calc(9px*var(--d));font-size:var(--fs-xs)}
+
+/* ---- build stamp + update banner ---- */
+.vchip{display:inline-block;margin-left:calc(9px*var(--d));font-size:var(--fs-xs);
+  font-weight:700;letter-spacing:.06em;color:var(--muted);border:1px solid var(--grid);
+  border-radius:var(--r-pill);padding:1px calc(8px*var(--d));vertical-align:4px;
+  white-space:nowrap;cursor:default}
+.updbar{display:none;align-items:center;gap:calc(12px*var(--d));flex-wrap:wrap;
+  background:var(--warn);color:#1a1400;border-radius:var(--r-sm);
+  padding:calc(9px*var(--d)) calc(13px*var(--d));margin:0 0 calc(14px*var(--d));
+  font-weight:600;font-size:var(--fs-sm);line-height:var(--lh)}
+.updbar.on{display:flex}
+.updbar .btn{background:#1a1400;color:var(--warn);border-color:#1a1400;box-shadow:none}
+.updbar .btn:hover{opacity:.85;background:#1a1400}
+.updbar .btn.ghost{background:transparent;color:#1a1400;border-color:rgba(26,20,0,.35)}
+
+/* ---- section nav ---- */
+.nav{position:sticky;top:0;z-index:20;background:var(--page);
+  border-bottom:1px solid var(--grid);margin:0 0 calc(6px*var(--d));
+  padding:calc(7px*var(--d)) 0;display:flex;gap:calc(5px*var(--d));
+  overflow-x:auto;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav a{font-size:var(--fs-xs);font-weight:650;text-decoration:none;color:var(--ink2);
+  padding:calc(4px*var(--d)) calc(9px*var(--d));border-radius:var(--r-pill);
+  border:1px solid transparent;white-space:nowrap}
+.nav a:hover{background:var(--wash2);color:var(--ink)}
+.nav a .c{color:var(--muted);font-weight:500}
+.nav a.on{border-color:var(--border);background:var(--surface);color:var(--ink)}
+
+/* ---- loader ---- */
+.loader{background:var(--surface);border:var(--bw) solid var(--border);
+  border-radius:var(--r);overflow:hidden;margin-bottom:calc(20px*var(--d));box-shadow:var(--shadow)}
+.lgrid{display:grid;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.lgrid{grid-template-columns:1fr}}
+.drop{padding:calc(26px*var(--d)) calc(22px*var(--d));text-align:center;
+  border:2px dashed var(--axis);border-radius:var(--r);margin:calc(14px*var(--d));
+  transition:background .12s,border-color .12s}
+.drop.hot{border-color:var(--accent);background:var(--wash)}
+.drop h3{margin:0 0 5px;font-size:var(--fs-h3);text-transform:none;letter-spacing:0;color:var(--ink)}
+.drop p{margin:0;font-size:var(--fs-sm);color:var(--ink2)}
+.drop .fname{margin-top:9px;font-size:var(--fs-xs);font-weight:700;color:var(--good)}
+.drop.opt{border-style:dotted}
+.hint{padding:0 calc(16px*var(--d)) calc(15px*var(--d));font-size:var(--fs-xs);
+  color:var(--muted);line-height:1.6}
+.hint code{background:var(--wash2);padding:1px 5px;border-radius:4px}
+
+/* ---- headline + tiles ---- */
+.headline{margin:calc(18px*var(--d)) 0 6px;padding:calc(16px*var(--d)) calc(18px*var(--d));
+  background:var(--surface);border:var(--bw) solid var(--border);
+  border-left:var(--rail) solid var(--crit);border-radius:var(--r);
+  font-size:calc(var(--fs) + 1px);line-height:1.5;box-shadow:var(--shadow)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));
+  gap:calc(9px*var(--d));margin:calc(16px*var(--d)) 0 6px}
+.tile{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(12px*var(--d)) calc(14px*var(--d));box-shadow:var(--shadow)}
+.tile .lab{font-size:var(--fs-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.tile .val{font-size:calc(var(--fs) * 1.68);font-weight:700;letter-spacing:-.025em;
+  margin-top:4px;line-height:1.1}
+.tile .sub{font-size:var(--fs-xs);color:var(--ink2);margin-top:2px}
+.tile.c .val{color:var(--crit)}
+
+/* ---- controls ---- */
+.ctrls{display:flex;flex-wrap:wrap;gap:calc(8px*var(--d));align-items:center;
+  margin:calc(16px*var(--d)) 0 4px;background:var(--surface);
+  border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(11px*var(--d)) calc(13px*var(--d));box-shadow:var(--shadow)}
+.ctrls label{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.ctrls select,.ctrls input[type=search]{background:var(--page);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:calc(5px*var(--d)) 8px}
+.ctrls input[type=search]{min-width:190px;flex:1 1 190px;max-width:320px}
+.sp{flex:1}
+
+/* ---- panels (model + design) ---- */
+details.panel{margin:calc(10px*var(--d)) 0 0;background:var(--surface);
+  border:var(--bw) solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+details.panel>summary{padding:calc(11px*var(--d)) calc(14px*var(--d));
+  font-weight:700;font-size:var(--fs-sm)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));
+  gap:calc(12px*var(--d));padding:4px calc(14px*var(--d)) calc(16px*var(--d))}
+.prow{font-size:var(--fs-sm)}
+.prow b{display:block;margin-bottom:5px;font-size:var(--fs-xs);font-weight:700}
+.prow input[type=number]{width:76px;background:var(--page);border:1px solid var(--border);
+  border-radius:5px;padding:4px 6px;font-variant-numeric:tabular-nums}
+.prow input[type=color]{width:38px;height:26px;padding:0;border:1px solid var(--border);
+  border-radius:5px;background:none;vertical-align:middle}
+.prow input[type=range]{width:100%;accent-color:var(--accent)}
+.prow select{width:100%;background:var(--page);border:1px solid var(--border);
+  border-radius:5px;padding:4px 6px}
+.prow span{color:var(--muted);font-size:var(--fs-xs)}
+.prow .v{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:650}
+.pnote{padding:0 calc(14px*var(--d)) calc(14px*var(--d));font-size:var(--fs-xs);
+  color:var(--muted);line-height:1.6}
+.pfoot{display:flex;gap:7px;flex-wrap:wrap;padding:0 calc(14px*var(--d)) calc(14px*var(--d))}
+.swatchrow{display:flex;align-items:center;gap:8px}
+.cx{font-size:var(--fs-xs);font-variant-numeric:tabular-nums;padding:1px 5px;border-radius:4px}
+.cx.ok{color:var(--good)} .cx.no{color:var(--crit);font-weight:700}
+
+/* ---- section headings ---- */
+h2{font-size:var(--fs-h2);margin:calc(38px*var(--d)) 0 4px;font-weight:700;
+  letter-spacing:-.01em;padding-bottom:calc(8px*var(--d));border-bottom:1px solid var(--grid);
+  display:flex;align-items:baseline;gap:calc(9px*var(--d));flex-wrap:wrap;scroll-margin-top:60px}
+h2 .n{color:var(--muted);font-weight:500;font-size:var(--fs-sm)}
+h2 .cp{margin-left:auto;font-size:var(--fs-xs);font-weight:600;
+  padding:calc(4px*var(--d)) calc(9px*var(--d));border-radius:var(--r-sm);
+  border:1px solid var(--border);background:var(--wash);cursor:pointer;color:var(--ink2)}
+h2 .cp:hover{background:var(--wash2);color:var(--ink)}
+h3{font-size:var(--fs-h3);margin:calc(22px*var(--d)) 0 calc(8px*var(--d));
+  font-weight:700;color:var(--ink2);text-transform:none;letter-spacing:0}
+p.lede{color:var(--ink2);font-size:var(--fs-sm);margin:calc(8px*var(--d)) 0 calc(14px*var(--d));
+  max-width:78ch}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:var(--r-pill);
+  border:1px solid var(--border);background:var(--wash);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.d-c{background:var(--crit)}.d-h{background:var(--serious)}
+.d-m{background:var(--warn)}.d-i{background:var(--muted)}
+
+/* ---- cards ---- */
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(13px*var(--d)) calc(15px*var(--d));margin-bottom:calc(8px*var(--d));
+  border-left:var(--rail) solid var(--crit);box-shadow:var(--shadow)}
+.card.h{border-left-color:var(--serious)}
+.card .r1{display:flex;flex-wrap:wrap;align-items:baseline;gap:calc(7px*var(--d)) calc(9px*var(--d))}
+.card .nm{font-weight:700;font-size:var(--fs)}
+.card .dba{color:var(--ink2);font-size:var(--fs-sm)}
+.card .mid{font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums}
+.card .r2{font-size:var(--fs-xs);color:var(--ink2);margin:5px 0 6px;display:flex;
+  flex-wrap:wrap;gap:4px 7px;align-items:center}
+.card .sc{font-weight:700;color:var(--ink)}
+.card .figs{font-size:var(--fs-sm);font-variant-numeric:tabular-nums;background:var(--wash);
+  border-radius:var(--r-sm);padding:calc(7px*var(--d)) calc(9px*var(--d));line-height:1.65}
+.card .act{font-size:var(--fs-sm);margin-top:calc(7px*var(--d))}
+.card .act .ar{color:var(--crit);font-weight:700;margin-right:5px}
+.pill{display:inline-block;font-size:var(--fs-xs);font-weight:700;padding:1.5px 5px;
+  border-radius:4px;background:var(--wash2);border:1px solid var(--border);margin-right:3px;
+  font-variant-numeric:tabular-nums}
+
+/* ---- tables ---- */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:4px 0}
+table{width:100%;border-collapse:collapse;font-size:var(--fs-sm);background:var(--surface);
+  border:var(--bw) solid var(--border);border-radius:var(--r-sm)}
+th{text-align:left;font-size:var(--fs-xs);letter-spacing:var(--tracking-label);
+  text-transform:uppercase;color:var(--muted);font-weight:700;
+  padding:calc(8px*var(--d)) calc(9px*var(--d));border-bottom:1px solid var(--axis);
+  white-space:nowrap;position:sticky;top:0;background:var(--th-bg);cursor:pointer;user-select:none}
+th:hover{color:var(--ink)}
+th.na{cursor:default}th.na:hover{color:var(--muted)}
+th .ar{opacity:.45;font-size:9px}
+td{padding:calc(7px*var(--d)) calc(9px*var(--d));border-bottom:1px solid var(--grid);
+  vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:var(--zebra)}
+tbody tr:hover{background:var(--wash2)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.mono{font-variant-numeric:tabular-nums;font-size:var(--fs-xs);color:var(--muted);white-space:nowrap}
+ul.flat{list-style:none;padding:0;margin:4px 0}
+ul.flat li{padding:calc(7px*var(--d)) calc(11px*var(--d));border:var(--bw) solid var(--border);
+  border-top:none;font-size:var(--fs-sm);display:flex;flex-wrap:wrap;gap:3px 9px;
+  align-items:baseline;background:var(--surface)}
+ul.flat li:nth-child(even){background:var(--zebra)}
+ul.flat li:first-child{border-top:var(--bw) solid var(--border);
+  border-radius:var(--r-sm) var(--r-sm) 0 0}
+ul.flat li:last-child{border-radius:0 0 var(--r-sm) var(--r-sm)}
+ul.flat .nm{font-weight:650}ul.flat .dba{color:var(--ink2)}
+ul.flat .tr{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink)}
+
+/* ---- callouts + chart ---- */
+.callout{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(13px*var(--d)) calc(15px*var(--d));margin-bottom:calc(8px*var(--d));
+  border-left:var(--rail) solid var(--warn);box-shadow:var(--shadow)}
+.callout.na{border-left-color:var(--muted)}
+.callout.cr{border-left-color:var(--crit)}
+.callout .ttl{font-weight:700;font-size:var(--fs-h3);margin-bottom:4px;color:var(--ink)}
+.callout p{margin:4px 0 0;font-size:var(--fs-sm);color:var(--ink2);line-height:1.55}
+.callout p strong{color:var(--ink)}
+.chart{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(15px*var(--d)) calc(15px*var(--d)) calc(8px*var(--d));box-shadow:var(--shadow)}
+.lgnd{display:flex;gap:15px;font-size:var(--fs-xs);color:var(--ink2);
+  margin-bottom:calc(12px*var(--d));flex-wrap:wrap}
+.lgnd span{display:inline-flex;align-items:center;gap:6px}
+.lgnd i{width:11px;height:11px;border-radius:2px;flex:none}
+.brow{display:grid;grid-template-columns:184px 1fr 54px;gap:10px;align-items:center;
+  margin-bottom:calc(6px*var(--d));font-size:var(--fs-sm)}
+.bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btrack{background:var(--grid);border-radius:3px;height:calc(14px*var(--d));overflow:hidden}
+.bfill{height:100%;border-radius:0 4px 4px 0;background:var(--accent)}
+.bfill.z{background:var(--crit)}
+.brow:hover .bfill{opacity:.82}
+.bv{text-align:right;font-variant-numeric:tabular-nums;font-weight:650}
+.zm{font-size:var(--fs-xs);color:var(--crit);font-weight:700}
+.note{font-size:var(--fs-xs);color:var(--muted);margin-top:calc(11px*var(--d));line-height:1.6}
+.empty{padding:calc(40px*var(--d)) 20px;text-align:center;color:var(--muted);font-size:var(--fs-sm)}
+
+
+/* ---- snapshot tabs ---- */
+.libbar{display:flex;flex-direction:column;gap:calc(8px*var(--d));
+  margin-bottom:calc(14px*var(--d))}
+.tabs{display:flex;gap:calc(5px*var(--d));align-items:stretch;overflow-x:auto;
+  scrollbar-width:thin;padding-bottom:2px}
+.tab{display:flex;align-items:center;gap:7px;background:var(--surface);
+  border:var(--bw) solid var(--border);border-bottom-width:3px;
+  border-radius:var(--r-sm) var(--r-sm) 0 0;padding:calc(8px*var(--d)) calc(12px*var(--d));
+  font-size:var(--fs-sm);white-space:nowrap;cursor:pointer;color:var(--ink2)}
+.tab:hover{background:var(--wash2);color:var(--ink)}
+.tab.on{border-bottom-color:var(--accent);color:var(--ink);font-weight:700;background:var(--page)}
+.tab.cmp{border-bottom-color:var(--serious)}
+.tab .dt{font-variant-numeric:tabular-nums}
+.tab .sub{font-size:var(--fs-xs);color:var(--muted);font-weight:400}
+.tab .x{opacity:.4;font-size:15px;line-height:1;padding:0 2px;border-radius:3px}
+.tab .x:hover{opacity:1;color:var(--crit);background:var(--wash2)}
+.tab .cmark{font-size:var(--fs-xs);color:var(--serious);font-weight:700}
+.tabadd{background:none;border:1px dashed var(--axis);border-radius:var(--r-sm);
+  padding:calc(8px*var(--d)) calc(13px*var(--d));font-size:var(--fs-sm);font-weight:650;
+  color:var(--ink2);white-space:nowrap}
+.tabadd:hover{border-color:var(--accent);color:var(--ink);background:var(--wash)}
+.libmeta{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:var(--fs-xs);
+  color:var(--muted)}
+.libmeta select{background:var(--page);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:3px 7px;font-size:var(--fs-xs);color:var(--ink)}
+.store-warn{color:var(--serious);font-weight:650}
+.store-ok{color:var(--good);font-weight:650}
+
+/* ---- drop overlay (whole-page target) ---- */
+.dz{position:fixed;inset:0;z-index:200;background:rgba(11,11,11,.55);
+  display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.dz.on{display:flex}
+.dz .inner{background:var(--surface);border:3px dashed var(--accent);border-radius:var(--r);
+  padding:44px 60px;text-align:center;max-width:520px}
+.dz h3{margin:0 0 6px;font-size:calc(var(--fs)*1.25);color:var(--ink)}
+.dz p{margin:0;font-size:var(--fs-sm);color:var(--ink2)}
+
+/* ---- merchant history ---- */
+.msearch{display:flex;gap:calc(8px*var(--d));flex-wrap:wrap;align-items:center;
+  background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(11px*var(--d)) calc(13px*var(--d));box-shadow:var(--shadow)}
+.msearch input{flex:1 1 260px;background:var(--page);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:calc(7px*var(--d)) 10px;font-size:var(--fs-sm)}
+.mres{list-style:none;padding:0;margin:calc(8px*var(--d)) 0 0;max-height:290px;overflow:auto;
+  border:var(--bw) solid var(--border);border-radius:var(--r-sm);background:var(--surface)}
+.mres:empty{display:none}
+.mres li{padding:calc(7px*var(--d)) calc(11px*var(--d));border-bottom:1px solid var(--grid);
+  cursor:pointer;display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;font-size:var(--fs-sm)}
+.mres li:last-child{border-bottom:none}
+.mres li:hover{background:var(--wash2)}
+.mres .nm{font-weight:650}
+.mres .dba{color:var(--ink2)}
+.mres .mid{font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums}
+.mres .tg{margin-left:auto;font-size:var(--fs-xs)}
+.mcard{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(15px*var(--d)) calc(17px*var(--d));margin-top:calc(10px*var(--d));box-shadow:var(--shadow)}
+.mhead{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;
+  padding-bottom:calc(10px*var(--d));border-bottom:1px solid var(--grid);margin-bottom:calc(12px*var(--d))}
+.mhead .nm{font-size:calc(var(--fs)*1.15);font-weight:700}
+.mhead .dba{color:var(--ink2)}
+.mhead .mid{font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums}
+.mhead .close{margin-left:auto;font-size:var(--fs-xs);background:var(--wash);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 9px;color:var(--ink2)}
+.sparks{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:calc(12px*var(--d));margin-bottom:calc(14px*var(--d))}
+.spark{border:1px solid var(--border);border-radius:var(--r-sm);padding:calc(10px*var(--d))}
+.spark .lab{font-size:var(--fs-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.spark .now{font-size:calc(var(--fs)*1.3);font-weight:700;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;margin:2px 0 4px}
+.spark .dlt{font-size:var(--fs-xs);font-variant-numeric:tabular-nums;font-weight:650}
+.spark svg{display:block;width:100%;height:38px;margin-top:5px;overflow:visible}
+.up{color:var(--crit)} .down{color:var(--good)} .flat{color:var(--muted)}
+
+/* ---- export preview: thick group separators ---- */
+table.exp td.gsep,table.exp th.gsep{border-right:2px solid var(--ink)}
+table.exp td{white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+table.exp{font-size:var(--fs-xs)}
+table.exp th{background:var(--wash2);color:var(--ink)}
+.expwrap{margin-top:calc(8px*var(--d))}
+.expwrap .note{margin-top:calc(8px*var(--d))}
+
+
+/* ---- folder connection ---- */
+.folderbar{display:flex;flex-wrap:wrap;gap:calc(7px*var(--d));align-items:center;
+  font-size:var(--fs-xs);color:var(--muted);padding-top:calc(4px*var(--d))}
+.folderbar .fname{font-weight:700;color:var(--ink);font-size:var(--fs-xs)}
+.folderbar .sep{opacity:.4}
+.fmode{display:inline-flex;align-items:center;gap:5px;font-weight:700}
+.fmode .dot{width:7px;height:7px;border-radius:50%}
+.fmode.on .dot{background:var(--good)} .fmode.on{color:var(--good)}
+.fmode.off .dot{background:var(--muted)}
+.fmode.warn .dot{background:var(--serious)} .fmode.warn{color:var(--serious)}
+.reconnect{background:var(--surface);border:1px solid var(--serious);color:var(--ink);
+  border-radius:var(--r-sm);padding:calc(5px*var(--d)) calc(10px*var(--d));font-weight:700;
+  font-size:var(--fs-xs)}
+.reconnect:hover{background:var(--wash2)}
+
+/* ---- portfolio trend ---- */
+.trend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:calc(10px*var(--d));margin-bottom:calc(12px*var(--d))}
+
+
+/* ---- per-MID trend table ---- */
+table.mt td{white-space:nowrap;vertical-align:middle}
+table.mt .who{max-width:215px;overflow:hidden;text-overflow:ellipsis}
+table.mt{font-size:var(--fs-sm)}
+table.mt td,table.mt th{padding:calc(6px*var(--d)) calc(7px*var(--d))}
+table.mt .who .nm{font-weight:650}
+table.mt .who .dba{color:var(--ink2);font-size:var(--fs-xs)}
+table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeric:tabular-nums}
+.mini{display:flex;align-items:center;gap:7px}
+.mini svg{width:62px;height:22px;flex:none;overflow:visible}
+.mini .v{font-variant-numeric:tabular-nums;font-weight:650;min-width:46px;text-align:right;
+  font-size:var(--fs-sm)}
+.mini .v small{display:block;font-weight:400;color:var(--muted);font-size:var(--fs-xs)}
+.st{font-size:var(--fs-xs);font-weight:700;padding:2px 7px;border-radius:var(--r-pill);
+  border:1px solid var(--border);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.st .dot{width:7px;height:7px;border-radius:50%}
+.st.bad{color:var(--crit)} .st.bad .dot{background:var(--crit)}
+.st.new{color:var(--crit)} .st.new .dot{background:var(--crit)}
+.st.fix{color:var(--good)} .st.fix .dot{background:var(--good)}
+.st.warn{color:var(--serious)} .st.warn .dot{background:var(--serious)}
+.st.mut{color:var(--muted)} .st.mut .dot{background:var(--muted)}
+.dcell{font-variant-numeric:tabular-nums;font-weight:700}
+.mtctrl{display:flex;flex-wrap:wrap;gap:calc(8px*var(--d));align-items:center;
+  background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(11px*var(--d)) calc(13px*var(--d));margin-bottom:calc(8px*var(--d));
+  box-shadow:var(--shadow)}
+.mtctrl label{font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.mtctrl select,.mtctrl input{background:var(--page);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:calc(5px*var(--d)) 8px;font-size:var(--fs-sm)}
+.legendrow{display:flex;gap:14px;flex-wrap:wrap;font-size:var(--fs-xs);color:var(--muted);
+  margin:calc(6px*var(--d)) 0 calc(10px*var(--d))}
+
+
+/* ---- top-level view switch ---- */
+.views{display:flex;gap:calc(4px*var(--d));align-items:center;flex-wrap:wrap;
+  border-bottom:2px solid var(--ink);margin:0 0 calc(16px*var(--d))}
+.views button{background:none;border:none;border-bottom:3px solid transparent;
+  padding:calc(9px*var(--d)) calc(15px*var(--d));font-size:calc(var(--fs)*0.97);
+  font-weight:650;color:var(--ink2);margin-bottom:-2px;border-radius:var(--r-sm) var(--r-sm) 0 0}
+.views button:hover{color:var(--ink);background:var(--wash)}
+.views button.on{color:var(--ink);font-weight:700;border-bottom-color:var(--crit)}
+.views button .c{color:var(--muted);font-weight:500;font-size:var(--fs-xs);margin-left:5px}
+.views .sp{flex:1}
+.views .ctx{font-size:var(--fs-xs);color:var(--muted);padding-right:4px}
+
+/* ---- level segmented control ---- */
+.seg{display:inline-flex;border:var(--bw) solid var(--border);border-radius:var(--r-sm);
+  overflow:hidden;background:var(--page)}
+.seg button{background:none;border:none;padding:calc(5px*var(--d)) calc(12px*var(--d));
+  font-size:var(--fs-sm);font-weight:650;color:var(--ink2)}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button.on{background:var(--ink);color:var(--page)}
+.seg button:hover:not(.on){background:var(--wash2);color:var(--ink)}
+table.mt tbody tr{cursor:pointer}
+table.mt tbody tr.sel{background:var(--wash2)}
+table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
+
+
+/* ---- bucket multi-select ---- */
+.msel{position:relative;display:inline-block}
+.mselbtn{background:var(--page);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:calc(5px*var(--d)) calc(10px*var(--d));font-size:var(--fs-sm);color:var(--ink);
+  display:inline-flex;align-items:center;gap:7px;max-width:330px}
+.mselbtn:hover{background:var(--wash2)}
+.mselbtn.active{border-color:var(--accent);font-weight:650}
+.mselbtn .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mselbtn .cnt{background:var(--wash2);border-radius:var(--r-pill);padding:0 6px;
+  font-size:var(--fs-xs);font-variant-numeric:tabular-nums;color:var(--ink2)}
+.mselbtn .car{opacity:.5;font-size:10px}
+.mselpanel{position:absolute;z-index:40;top:calc(100% + 4px);left:0;min-width:330px;
+  max-width:420px;background:var(--surface);border:var(--bw) solid var(--border);
+  border-radius:var(--r);box-shadow:0 6px 22px rgba(0,0,0,.16);padding:calc(9px*var(--d));
+  display:none}
+.mselpanel.open{display:block}
+.mselpanel input[type=search]{width:100%;background:var(--page);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:calc(6px*var(--d)) 9px;font-size:var(--fs-sm);
+  margin-bottom:calc(7px*var(--d))}
+.mselacts{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:calc(7px*var(--d));
+  padding-bottom:calc(7px*var(--d));border-bottom:1px solid var(--grid)}
+.mselacts button{background:var(--page);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:3px 8px;font-size:var(--fs-xs);font-weight:650;color:var(--ink2)}
+.mselacts button:hover{background:var(--wash2);color:var(--ink)}
+.mselist{max-height:290px;overflow-y:auto;margin:0 -4px}
+.mselist label{display:flex;align-items:baseline;gap:8px;padding:calc(5px*var(--d)) 6px;
+  border-radius:var(--r-sm);cursor:pointer;font-size:var(--fs-sm);
+  /* the surrounding .ctrls/.mtctrl label rule uppercases micro-labels;
+     these are real names and must not inherit that */
+  text-transform:none;letter-spacing:normal;color:var(--ink);font-weight:400}
+.mselist label:hover{background:var(--wash2)}
+.mselist input{margin:0;flex:none;accent-color:var(--accent);position:relative;top:2px}
+.mselist .bn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mselist .meta{font-size:var(--fs-xs);color:var(--muted);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+.mselist .meta b{color:var(--crit);font-weight:700}
+.mselempty{padding:12px 6px;font-size:var(--fs-sm);color:var(--muted)}
+.mselfoot{border-top:1px solid var(--grid);margin-top:calc(7px*var(--d));
+  padding-top:calc(7px*var(--d));font-size:var(--fs-xs);color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--wash2);
+  border:1px solid var(--border);border-radius:var(--r-pill);padding:2px 4px 2px 10px;
+  font-size:var(--fs-xs);font-weight:650;color:var(--ink)}
+.chip button{background:none;border:none;color:var(--ink2);font-size:14px;line-height:1;
+  padding:0 4px;border-radius:50%}
+.chip button:hover{color:var(--crit);background:var(--wash)}
+
+
+/* ---- settings page ---- */
+.setwrap{display:flex;flex-direction:column;gap:calc(10px*var(--d))}
+.setintro{font-size:var(--fs-sm);color:var(--ink2);max-width:78ch;margin:0 0 calc(4px*var(--d))}
+
+/* ---- scoring model cards ---- */
+.flagcard{display:grid;grid-template-columns:64px 1fr auto;gap:calc(12px*var(--d));
+  align-items:start;background:var(--surface);border:var(--bw) solid var(--border);
+  border-radius:var(--r);padding:calc(12px*var(--d)) calc(14px*var(--d));
+  margin-bottom:calc(7px*var(--d));box-shadow:var(--shadow)}
+.flagcard .code{font-size:calc(var(--fs)*1.15);font-weight:700;font-variant-numeric:tabular-nums;
+  padding:calc(4px*var(--d)) 0;text-align:center;border-radius:var(--r-sm);
+  background:var(--wash2);border:1px solid var(--border)}
+.flagcard .nm{font-weight:700;font-size:var(--fs);margin-bottom:2px}
+.flagcard .rule{font-size:var(--fs-sm);color:var(--ink);line-height:2}
+.flagcard .rule input{width:62px;background:var(--page);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:3px 6px;font-size:var(--fs-sm);font-weight:650;
+  font-variant-numeric:tabular-nums;text-align:right}
+.flagcard .rule .op{color:var(--muted)}
+.flagcard .act{font-size:var(--fs-xs);color:var(--ink2);margin-top:5px}
+.flagcard .act b{color:var(--ink)}
+.flagcard .side{text-align:right;white-space:nowrap}
+.flagcard .wlab{font-size:var(--fs-xs);letter-spacing:var(--tracking-label);
+  text-transform:uppercase;color:var(--muted);font-weight:700}
+.flagcard .side input{width:58px;background:var(--page);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:calc(5px*var(--d)) 7px;font-size:var(--fs);font-weight:700;
+  font-variant-numeric:tabular-nums;text-align:right;margin-top:3px}
+.flagcard .hits{font-size:var(--fs-xs);color:var(--ink2);margin-top:6px;font-variant-numeric:tabular-nums}
+.flagcard .hits b{color:var(--crit)}
+.setblock{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(13px*var(--d)) calc(15px*var(--d));box-shadow:var(--shadow)}
+.setblock h4{margin:0 0 calc(9px*var(--d));font-size:var(--fs-h3);font-weight:700;color:var(--ink)}
+.setrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:var(--fs-sm);
+  padding:calc(5px*var(--d)) 0}
+.setrow input{width:66px;background:var(--page);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:4px 7px;font-size:var(--fs-sm);font-weight:650;
+  font-variant-numeric:tabular-nums;text-align:right}
+.setrow .grow{flex:1}
+.setrow .out{font-variant-numeric:tabular-nums;color:var(--muted);font-size:var(--fs-xs)}
+.livepv{display:flex;gap:calc(14px*var(--d));flex-wrap:wrap;padding:calc(10px*var(--d)) 0 0;
+  margin-top:calc(8px*var(--d));border-top:1px solid var(--grid);font-size:var(--fs-sm)}
+.livepv span b{font-variant-numeric:tabular-nums}
+.setacts{display:flex;gap:7px;flex-wrap:wrap;margin-top:calc(10px*var(--d))}
+
+/* ---- trends search made obvious ---- */
+.mtctrl .searchwrap{display:flex;align-items:center;gap:6px;flex:1 1 240px;min-width:200px}
+.mtctrl .searchwrap input{flex:1;min-width:150px}
+.onerep{background:var(--surface);border:var(--bw) solid var(--border);
+  border-left:var(--rail) solid var(--warn);border-radius:var(--r);
+  padding:calc(11px*var(--d)) calc(14px*var(--d));margin-bottom:calc(10px*var(--d));
+  font-size:var(--fs-sm);color:var(--ink2)}
+.onerep b{color:var(--ink)}
+
+
+/* ---- data strip: the single place files are managed ---- */
+.data{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--r);
+  padding:calc(12px*var(--d)) calc(14px*var(--d));margin-bottom:calc(14px*var(--d));
+  box-shadow:var(--shadow)}
+.data.setup{border-left:var(--rail) solid var(--accent)}
+.drow{display:flex;align-items:center;gap:calc(10px*var(--d));flex-wrap:wrap}
+.dicon{font-size:19px;line-height:1;flex:none;opacity:.75}
+.dmain{flex:1 1 320px;min-width:240px}
+.dtitle{font-weight:700;font-size:var(--fs);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dtitle .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dtitle .dot.on{background:var(--good)} .dtitle .dot.wait{background:var(--serious)}
+.dtitle .dot.off{background:var(--muted)}
+.dsub{font-size:var(--fs-sm);color:var(--ink2);margin-top:2px;line-height:1.5}
+.dsub code{background:var(--wash2);padding:1px 5px;border-radius:4px;font-size:var(--fs-xs)}
+.dacts{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.btn.big{padding:calc(9px*var(--d)) calc(16px*var(--d));font-size:var(--fs)}
+.dtabs{display:flex;gap:calc(5px*var(--d));overflow-x:auto;scrollbar-width:thin;
+  margin-top:calc(11px*var(--d));padding-top:calc(11px*var(--d));
+  border-top:1px solid var(--grid)}
+.dtabs:empty{display:none}
+.dhint{font-size:var(--fs-xs);color:var(--muted);margin-top:calc(9px*var(--d));line-height:1.6}
+.dhint b{color:var(--ink2)}
+.steps{counter-reset:st;margin:calc(10px*var(--d)) 0 0;padding:0;list-style:none}
+.steps li{counter-increment:st;position:relative;padding-left:26px;
+  margin-bottom:calc(5px*var(--d));font-size:var(--fs-sm);color:var(--ink2)}
+.steps li::before{content:counter(st);position:absolute;left:0;top:0;width:18px;height:18px;
+  border-radius:50%;background:var(--wash2);border:1px solid var(--border);
+  font-size:var(--fs-xs);font-weight:700;display:flex;align-items:center;justify-content:center;
+  color:var(--ink)}
+.steps li b{color:var(--ink)}
+
+/* ---- misc ---- */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(90px);
+  background:var(--ink);color:var(--page);padding:10px 18px;border-radius:var(--r-sm);
+  font-size:var(--fs-sm);font-weight:600;transition:transform .22s;z-index:99;pointer-events:none}
+.toast.on{transform:translateX(-50%) translateY(0)}
+.top{position:fixed;right:18px;bottom:18px;z-index:30;width:38px;height:38px;border-radius:50%;
+  background:var(--surface);border:var(--bw) solid var(--border);color:var(--ink2);
+  display:none;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.top.on{display:flex}
+footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(--grid);
+  font-size:var(--fs-xs);color:var(--muted);line-height:1.7}
+.err{background:var(--surface);color:var(--crit);border:1px solid var(--crit);
+  border-left:var(--rail) solid var(--crit);border-radius:var(--r);
+  padding:calc(11px*var(--d)) calc(14px*var(--d));font-size:var(--fs-sm);margin:12px 0;font-weight:600}
+
+@media (max-width:640px){
+  :root{--fs:14px}
+  .wrap{padding:16px 12px 60px}
+  .brow{grid-template-columns:112px 1fr 46px}
+  ul.flat .tr{margin-left:0;width:100%}
+  h2 .cp{margin-left:0}
+  .ctrls input[type=search]{max-width:none}
+}
+@media print{
+  .topbar .tools,.loader,.ctrls,details.panel,h2 .cp,.toast,.nav,.top,
+  .updbar{display:none}
+  body{background:#fff;--shadow:none}
+  .card,.tile,table,.callout,.chart{break-inside:avoid;box-shadow:none}
+  h2{break-after:avoid}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+</style></head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div class="brand">
+    <div class="kick">Paymenthelp</div>
+    <h1>Chargeback Risk Console<span class="vchip" id="vchip"></span></h1>
+  </div>
+  <div class="tools">
+    <button class="btn p" id="btnSheets" disabled>Copy for Google Sheets</button>
+    <button class="btn" id="btnCsv" disabled>Download CSV</button>
+    <button class="btn" id="btnPrint" disabled>Print / PDF</button>
+    <button class="btn" id="btnTheme" title="Light / dark">&#9686;</button>
+  </div>
+</div>
+
+<div class="updbar" id="updbar">
+  <span id="updmsg"></span>
+  <button class="btn sm" id="btnUpd">Reload now</button>
+  <button class="btn sm ghost" id="btnUpdLater">Later</button>
+</div>
+
+<div id="datastrip"></div>
+<input type="file" id="fileA" accept=".csv,text/csv" multiple hidden>
+<input type="file" id="fileDir" webkitdirectory directory multiple hidden>
+
+<div id="errBox"></div>
+<div id="out"><div class="empty">Load today's report to generate the audit.</div></div>
+
+<footer id="foot"></footer>
+</div>
+<div class="dz" id="dz"><div class="inner">
+  <h3>Drop to add reports</h3>
+  <p>Portal CSV exports. Several at once is fine.</p>
+</div></div>
+<button class="top" id="btnTop" title="Back to top">&#8593;</button>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Chargeback Risk Console
+   All analysis runs client-side. Report data never leaves this
+   browser. The only network call the page ever makes is a fetch of
+   its own version.json to see whether a newer build was deployed;
+   it carries no data and is skipped entirely when opened from disk.
+
+   FILE MAP
+     1. THEME block (in <style> above)  — all visual tokens
+     2. LAYOUT + COMPONENTS (in <style>) — written against tokens
+     3. DESIGN SYSTEM (below)            — live theme editing
+     4. MODEL + SCORING                  — verified; do not edit casually
+     5. RENDERING                        — markup generation
+     6. EXPORT                           — clipboard / CSV
+     7. WIRING                           — event handlers
+   ============================================================ */
+
+/* ---------- build identity + update check ----------------------
+   APP_VERSION is baked into this file. version.json sits next to it
+   on the host and carries the same string. When they disagree, the
+   host has a newer build than the tab you are looking at, and the
+   banner offers a reload.
+
+   Nothing is uploaded. The check is skipped when the page is opened
+   from disk (file://) and fails silently when offline or when no
+   version.json is present, so a local copy behaves exactly as before.
+
+   TO RELEASE: bump APP_VERSION here, put the same string in
+   version.json, upload both. Users are told within 15 minutes, or
+   the moment they switch back to the tab.
+   --------------------------------------------------------------- */
+const APP_VERSION   = "2026.08.28";
+const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
+const UPDATE_CHECK_MS = 15*60*1000;
+
+const UPDATE = (function(){
+  let latest = null, shown = false;
+
+  async function check(){
+    if(location.protocol === "file:") return null;
+    try{
+      const r = await fetch("version.json?_=" + Date.now(), {cache:"no-store"});
+      if(!r.ok) return null;
+      const j = await r.json();
+      if(!j || !j.version) return null;
+      latest = String(j.version);
+      if(latest !== APP_VERSION && !shown) show(j);
+      return latest;
+    }catch(e){ return null; }
+  }
+
+  function show(j){
+    const bar = document.getElementById("updbar");
+    const msg = document.getElementById("updmsg");
+    if(!bar || !msg) return;
+    msg.textContent =
+      "Version " + latest + " is available — you are on " + APP_VERSION + ". "
+      + (j.notes ? j.notes + " " : "")
+      + "Reloading keeps your saved reports and your connected folder.";
+    bar.classList.add("on");
+    shown = true;
+  }
+
+  function start(){
+    check();
+    setInterval(check, UPDATE_CHECK_MS);
+    document.addEventListener("visibilitychange", () => {
+      if(!document.hidden) check();
+    });
+  }
+
+  return {
+    start, check,
+    get latest(){ return latest; },
+    reload(){
+      const v = latest || String(Date.now());
+      location.replace(location.pathname + "?v=" + encodeURIComponent(v) + location.hash);
+    }
+  };
+})();
+
+/* ---------- model (editable at runtime) ---------- */
+const MODEL = {
+  w:      {F1:4, F2:1, F3:3, F4:2, F5:10},
+  f1Visa: 5,    f1Cov: 50,
+  f2Visa: 3,
+  f3Mc:   5,    f3Rfnd: 10,
+  f4Brand:5,
+  f5Cbp:  2,    f5Cb: 5,
+  bonHi:  5,    bonHiPts: 6,
+  bonMid: 3,    bonMidPts: 3,
+  tierCrit: 16, tierHigh: 10
+};
+const SEVERITY = ["F5","F1","F3","F4","F2"];
+const FLAGDEF = {
+  F1:["Visa CB ≥ threshold AND (RDR = 0 OR coverage < threshold)","",
+      "Enable RDR or raise the RDR ceiling. Most fixable flag."],
+  F2:["RDR = 0 AND Visa CB > threshold","","Enable RDR immediately."],
+  F3:["MC CB > threshold AND Refund % < threshold","",
+      "Ethoca alerts, refund-policy review, descriptor and fulfillment check."],
+  F4:["Amex CB ≥ threshold OR Discover CB ≥ threshold","",
+      "Merchant-side remediation only."],
+  F5:["CB % > threshold AND CB # ≥ threshold","",
+      "Immediate review, consider reserve or volume cap."]
+};
+const PRIMARY_LABEL = {
+  F5:"CB % over ceiling", F1:"Visa disputes not being deflected",
+  F3:"Mastercard disputes with thin refunds", F4:"Uncovered Amex/Discover losses",
+  F2:"RDR switched off"
+};
+
+/* ---------- state ---------- */
+let SNAP_A = null, SNAP_B = null;
+let VIEW = {page:"audit", buckets:null, bkOpen:false, bkQ:"",
+            tier:"__all", q:"", sort:{key:"w", dir:-1}};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtN = v => v==null ? "n/a" : Number(v).toLocaleString("en-US");
+const fmtM = (v,d) => v==null ? "not available"
+  : "$" + Number(v).toLocaleString("en-US",{minimumFractionDigits:d==null?2:d, maximumFractionDigits:d==null?2:d});
+const fmtP = (v,d) => v==null ? "n/a" : Number(v).toFixed(d==null?1:d) + "%";
+
+function toast(msg){
+  const t=$("#toast"); t.textContent=msg; t.classList.add("on");
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("on"), 1900);
+}
+function showErr(msg){ $("#errBox").innerHTML = '<div class="err">'+esc(msg)+'</div>'; }
+function clearErr(){ $("#errBox").innerHTML=""; }
+
+
+/* ============================================================
+   DESIGN SYSTEM — live theme editing.
+   Every control writes a CSS custom property on <html>, so the
+   whole UI restyles without re-rendering the report.
+   "Copy theme CSS" emits a replacement for the THEME block.
+   ============================================================ */
+const THEME_DEFAULTS = {
+  crit:"#d03b3b", serious:"#ec835a", warn:"#fab219", good:"#0ca30c", accent:"#2a78d6",
+  page:"#f9f9f7", surface:"#fcfcfb", ink:"#0b0b0b",
+  font:'system-ui,-apple-system,"Segoe UI",sans-serif',
+  fs:15, d:1, r:10, bw:1, rail:4, maxw:1240, shadow:"none", zebra:"transparent"
+};
+const THEME = Object.assign({}, THEME_DEFAULTS);
+
+const FONT_CHOICES = [
+  ['system-ui,-apple-system,"Segoe UI",sans-serif', "System UI (default)"],
+  ['"Inter","Helvetica Neue",Helvetica,Arial,sans-serif', "Inter / Helvetica"],
+  ['"Segoe UI","Roboto",sans-serif', "Segoe / Roboto"],
+  ['Georgia,"Times New Roman",serif', "Georgia serif"],
+  ['ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace', "Monospace"]
+];
+const SURFACE_PRESETS = [
+  ["paper",  "Paper (default)", "#f9f9f7", "#fcfcfb", "#0b0b0b"],
+  ["white",  "Pure white",      "#ffffff", "#ffffff", "#111111"],
+  ["warm",   "Warm grey",       "#f6f4f0", "#fffdfa", "#1a1714"],
+  ["cool",   "Cool grey",       "#f4f6f8", "#fbfcfd", "#0f1417"],
+  ["contrast","High contrast",  "#ffffff", "#ffffff", "#000000"]
+];
+const SHADOW_CHOICES = [
+  ["none","Flat (default)"],
+  ["0 1px 2px rgba(0,0,0,.05)","Subtle"],
+  ["0 2px 6px rgba(0,0,0,.08)","Raised"],
+  ["0 4px 14px rgba(0,0,0,.10)","Floating"]
+];
+
+/* --- contrast maths, so a colour choice can be checked not guessed --- */
+function hexToRgb(h){
+  h=String(h).replace("#","");
+  if(h.length===3) h=h.split("").map(c=>c+c).join("");
+  const v=parseInt(h,16);
+  return [(v>>16)&255,(v>>8)&255,v&255];
+}
+function lum(h){
+  const s=hexToRgb(h).map(c=>{c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);});
+  return 0.2126*s[0]+0.7152*s[1]+0.0722*s[2];
+}
+function contrast(a,b){
+  const l1=lum(a), l2=lum(b);
+  return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05);
+}
+function activeSurface(){
+  const dark = document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme")
+        && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  return dark ? "#1a1a19" : THEME.surface;
+}
+
+function applyTheme(){
+  const r=document.documentElement.style;
+  r.setProperty("--crit",THEME.crit);
+  r.setProperty("--serious",THEME.serious);
+  r.setProperty("--warn",THEME.warn);
+  r.setProperty("--good",THEME.good);
+  r.setProperty("--accent",THEME.accent);
+  r.setProperty("--font",THEME.font);
+  r.setProperty("--fs",THEME.fs+"px");
+  r.setProperty("--d",String(THEME.d));
+  r.setProperty("--r",THEME.r+"px");
+  r.setProperty("--bw",THEME.bw+"px");
+  r.setProperty("--rail",THEME.rail+"px");
+  r.setProperty("--maxw",THEME.maxw+"px");
+  r.setProperty("--shadow",THEME.shadow);
+  r.setProperty("--zebra",THEME.zebra);
+  // surfaces only override light mode; dark keeps its validated steps
+  const isDark = document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme")
+        && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  if(isDark){
+    r.removeProperty("--page"); r.removeProperty("--surface"); r.removeProperty("--ink");
+  } else {
+    r.setProperty("--page",THEME.page);
+    r.setProperty("--surface",THEME.surface);
+    r.setProperty("--ink",THEME.ink);
+  }
+  refreshContrast();
+}
+
+function refreshContrast(){
+  document.querySelectorAll("[data-cx]").forEach(el=>{
+    const key=el.getAttribute("data-cx");
+    const c=contrast(THEME[key], activeSurface());
+    el.textContent = c.toFixed(2)+":1";
+    el.className = "cx " + (c>=3 ? "ok" : "no");
+    el.title = c>=3 ? "Passes 3:1 against the current surface"
+      : "Below 3:1 against the current surface — pair it with a label or icon, never colour alone";
+  });
+}
+
+function designPanelHTML(openState){
+  const col = (k,label,note) => `<div class="prow"><b>${label}</b>
+    <span class="swatchrow"><input type="color" data-t="${k}" value="${THEME[k]}">
+    <span class="cx" data-cx="${k}"></span></span>
+    ${note?`<span>${note}</span>`:""}</div>`;
+  return `<details class="panel" id="designPanel"${openState?" open":""}><summary>Colour, type, density, shape</summary>
+    <div class="pgrid">
+      ${col("crit","Critical / act today")}
+      ${col("serious","High tier")}
+      ${col("warn","Monitor tier")}
+      ${col("good","Positive / confirm")}
+      ${col("accent","Accent — chart bars, focus")}
+      <div class="prow"><b>Typeface</b>
+        <select data-t="font">${FONT_CHOICES.map(([v,l])=>
+          `<option value='${v}'${THEME.font===v?" selected":""}>${l}</option>`).join("")}</select></div>
+      <div class="prow"><b>Base text size — <span class="v" id="vFs">${THEME.fs}px</span></b>
+        <input type="range" min="12" max="19" step="0.5" data-t="fs" value="${THEME.fs}">
+        <span>Everything scales from this.</span></div>
+      <div class="prow"><b>Density — <span class="v" id="vD">${THEME.d}</span></b>
+        <input type="range" min="0.6" max="1.25" step="0.02" data-t="d" value="${THEME.d}">
+        <span>Padding and gaps. Lower fits more on screen.</span></div>
+      <div class="prow"><b>Corner radius — <span class="v" id="vR">${THEME.r}px</span></b>
+        <input type="range" min="0" max="20" step="1" data-t="r" value="${THEME.r}"></div>
+      <div class="prow"><b>Border weight — <span class="v" id="vBw">${THEME.bw}px</span></b>
+        <input type="range" min="0" max="3" step="1" data-t="bw" value="${THEME.bw}"></div>
+      <div class="prow"><b>Card rail — <span class="v" id="vRail">${THEME.rail}px</span></b>
+        <input type="range" min="0" max="10" step="1" data-t="rail" value="${THEME.rail}">
+        <span>Coloured stripe down the left of cards.</span></div>
+      <div class="prow"><b>Content width — <span class="v" id="vMaxw">${THEME.maxw}px</span></b>
+        <input type="range" min="900" max="1800" step="20" data-t="maxw" value="${THEME.maxw}"></div>
+      <div class="prow"><b>Surface preset</b>
+        <select data-t="__surface">${SURFACE_PRESETS.map(p=>
+          `<option value="${p[0]}"${THEME.page===p[2]&&THEME.surface===p[3]?" selected":""}>${p[1]}</option>`).join("")}</select>
+        <span>Light mode only — dark keeps its validated steps.</span></div>
+      <div class="prow"><b>Shadow</b>
+        <select data-t="shadow">${SHADOW_CHOICES.map(([v,l])=>
+          `<option value="${v}"${THEME.shadow===v?" selected":""}>${l}</option>`).join("")}</select></div>
+      <div class="prow"><b>Table stripes</b>
+        <select data-t="zebra">
+          <option value="transparent"${THEME.zebra==="transparent"?" selected":""}>Off (default)</option>
+          <option value="var(--wash)"${THEME.zebra==="var(--wash)"?" selected":""}>On</option>
+        </select></div>
+    </div>
+    <div class="pfoot">
+      <button class="btn sm" id="btnThemeCopy">Copy theme CSS</button>
+      <button class="btn sm" id="btnThemeReset">Reset to defaults</button>
+      <button class="btn sm" id="btnDensityToggle">Toggle compact</button>
+    </div>
+    <div class="pnote">Changes are live and affect only how this page looks — never the numbers.
+      The contrast figure beside each colour is measured against the current surface; below 3:1 the
+      colour must be paired with a text label or icon rather than carrying meaning on its own, which
+      is why every tier badge here shows a word as well as a dot. Use <em>Copy theme CSS</em> to paste
+      your values permanently into the THEME block at the top of the file.</div>
+  </details>`;
+}
+
+function themeCSS(){
+  return `:root{
+  /* colours */
+  --crit:${THEME.crit}; --serious:${THEME.serious}; --warn:${THEME.warn};
+  --good:${THEME.good}; --accent:${THEME.accent};
+  /* light surfaces + ink */
+  --page:${THEME.page}; --surface:${THEME.surface}; --ink:${THEME.ink};
+  /* type */
+  --font:${THEME.font}; --fs:${THEME.fs}px;
+  /* shape + density */
+  --d:${THEME.d}; --r:${THEME.r}px; --bw:${THEME.bw}px; --rail:${THEME.rail}px;
+  --maxw:${THEME.maxw}px; --shadow:${THEME.shadow}; --zebra:${THEME.zebra};
+}`;
+}
+
+function wireDesign(){
+  const p=document.getElementById("designPanel"); if(!p) return;
+  p.querySelectorAll("[data-t]").forEach(inp=>{
+    const key=inp.getAttribute("data-t");
+    const ev = inp.type==="range" ? "input" : "change";
+    inp.addEventListener(ev, ()=>{
+      if(key==="__surface"){
+        const pr=SURFACE_PRESETS.find(x=>x[0]===inp.value);
+        if(pr){ THEME.page=pr[2]; THEME.surface=pr[3]; THEME.ink=pr[4]; }
+      } else if(["fs","d","r","bw","rail","maxw"].indexOf(key)>=0){
+        THEME[key]=parseFloat(inp.value);
+        const lbl={fs:"vFs",d:"vD",r:"vR",bw:"vBw",rail:"vRail",maxw:"vMaxw"}[key];
+        const el=document.getElementById(lbl);
+        if(el) el.textContent = key==="d" ? THEME.d.toFixed(2) : THEME[key]+(key==="maxw"||key==="fs"||key==="r"||key==="bw"||key==="rail"?"px":"");
+      } else {
+        THEME[key]=inp.value;
+      }
+      applyTheme();
+    });
+  });
+  document.getElementById("btnThemeCopy").onclick=async()=>{
+    const css=themeCSS();
+    try{ await navigator.clipboard.writeText(css); toast("Theme CSS copied — paste over the THEME block."); }
+    catch(e){
+      const ta=document.createElement("textarea"); ta.value=css;
+      ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta);
+      ta.select(); document.execCommand("copy"); ta.remove();
+      toast("Theme CSS copied.");
+    }
+  };
+  document.getElementById("btnThemeReset").onclick=()=>{
+    Object.assign(THEME, THEME_DEFAULTS); applyTheme();
+    const dp=document.getElementById("designPanel"); const open=dp.open;
+    dp.outerHTML=designPanelHTML(); document.getElementById("designPanel").open=open;
+    wireDesign();
+    toast("Theme reset to defaults.");
+  };
+  document.getElementById("btnDensityToggle").onclick=()=>{
+    THEME.d = THEME.d>0.85 ? 0.72 : 1; applyTheme();
+    const s=document.querySelector('[data-t="d"]'); if(s) s.value=THEME.d;
+    const el=document.getElementById("vD"); if(el) el.textContent=THEME.d.toFixed(2);
+    toast(THEME.d<0.85 ? "Compact density." : "Comfortable density.");
+  };
+}
+
+
+/* ---------- CSV parsing (RFC4180-ish, handles quotes + embedded commas) ---------- */
+function parseCSV(text){
+  text = text.replace(/^﻿/,"");
+  const rows=[]; let row=[], field="", inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; }
+      else field+=c;
+    } else {
+      if(c==='"') inQ=true;
+      else if(c===","){ row.push(field); field=""; }
+      else if(c==="\n"){ row.push(field); rows.push(row); row=[]; field=""; }
+      else if(c==="\r"){ /* skip */ }
+      else field+=c;
+    }
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(x => String(x).trim()!==""));
+}
+const num = s => {
+  const c = String(s==null?"":s).replace(/[$,%\s]/g,"").replace(/,/g,"");
+  if(c===""||c==="-") return 0;
+  const v = parseFloat(c);
+  return isNaN(v) ? 0 : v;
+};
+
+/* map header names -> canonical keys, so column order can move without breaking */
+const COLMAP = {
+  "bckt":"b", "bucket":"b",
+  "merch.":"m", "merch":"m", "merchant":"m",
+  "dba":"d",
+  "mid":"id",
+  "# sales":"s", "#sales":"s", "sales":"s",
+  "$ sales":"ds", "$sales":"ds",
+  "avg sales":"avg",
+  "$ rfnds":"dr", "$rfnds":"dr", "$ refunds":"dr",
+  "% rfnds":"prf", "% refunds":"prf",
+  "cb #":"cb", "cb#":"cb",
+  "cb vol.":"cv", "cb vol":"cv", "cb volume":"cv",
+  "% cb":"pcb",
+  "# rdr":"rn", "#rdr":"rn",
+  "$ rdr":"rd", "$rdr":"rd",
+  "amex":"ax", "visa":"vi", "mc":"mc", "disc":"dc", "discover":"dc"
+};
+const REQUIRED = ["b","m","d","id","s","ds","dr","cb","cv","rn","ax","vi","mc","dc"];
+
+function loadSnapshot(text, name){
+  const raw = parseCSV(text);
+  if(!raw.length) throw new Error("That file appears to be empty.");
+  const head = raw[0].map(h => String(h).trim().toLowerCase());
+  const idx = {};
+  head.forEach((h,i)=>{ const k=COLMAP[h]; if(k && idx[k]===undefined) idx[k]=i; });
+  /* Our own audit export shares many column names with a portal export,
+     so without this guard a saved audit read back from the folder would
+     parse as a phantom report containing only the flagged rows. */
+  const AUDIT_SIGNATURE = ["tier","flags","primary","action"];
+  if(AUDIT_SIGNATURE.every(h => head.indexOf(h)>=0)){
+    const err = new Error("That file is an audit produced by this tool, not a portal export.");
+    err.isAudit = true;
+    throw err;
+  }
+  const missing = REQUIRED.filter(k => idx[k]===undefined);
+  if(missing.length){
+    throw new Error("This does not look like a portal chargeback export — could not find column(s): "
+      + missing.join(", ") + ". Found header: " + raw[0].filter(x=>x).join(", "));
+  }
+  const rows=[];
+  for(let i=1;i<raw.length;i++){
+    const r=raw[i];
+    const mid = String(r[idx.id]==null?"":r[idx.id]).trim();
+    if(!mid) continue;
+    rows.push({
+      b:String(r[idx.b]||"").trim(), m:String(r[idx.m]||"").trim(), d:String(r[idx.d]||"").trim(),
+      id:mid,
+      s:Math.round(num(r[idx.s])), ds:num(r[idx.ds]), dr:num(r[idx.dr]),
+      cb:Math.round(num(r[idx.cb])), cv:num(r[idx.cv]),
+      rn:Math.round(num(r[idx.rn])),
+      ax:Math.round(num(r[idx.ax])), vi:Math.round(num(r[idx.vi])),
+      mc:Math.round(num(r[idx.mc])), dc:Math.round(num(r[idx.dc])),
+      pcbSrc:String(r[idx.pcb]==null?"":r[idx.pcb]).trim(),
+      prfSrc:String(r[idx.prf]==null?"":r[idx.prf]).trim()
+    });
+  }
+  if(!rows.length) throw new Error("No data rows found under the header.");
+  // date from filename when present: CB______YYYYMMDDHH.MM.SS
+  let stamp=null;
+  const mm = /(\d{4})(\d{2})(\d{2})(\d{2})[.\-_](\d{2})[.\-_](\d{2})/.exec(name||"");
+  if(mm){
+    stamp = `${mm[1]}-${mm[2]}-${mm[3]} ${mm[4]}:${mm[5]}:${mm[6]}`;
+  } else {
+    /* a hand-named file like 2026-08-14.csv still sorts correctly; the
+       time of day is filled in from the file itself by the scanner */
+    const dd = /(20\d{2})-(\d{2})-(\d{2})/.exec(name||"");
+    if(dd) stamp = `${dd[1]}-${dd[2]}-${dd[3]} 00:00:00`;
+  }
+  return {name:name||"report.csv", rows, stamp, dateOnly:!mm && !!stamp};
+}
+
+/* ---------- scoring ---------- */
+function score(r){
+  const M=MODEL;
+  const cbp = r.s>0 ? r.cb/r.s*100 : null;
+  const rfp = r.ds>0 ? r.dr/r.ds*100 : null;
+  const cov = (r.rn+r.vi)>0 ? r.rn/(r.rn+r.vi)*100 : null;
+  const mcs = r.cb>0 ? r.mc/r.cb*100 : null;
+  const zs  = (r.s===0 && r.cb>0);
+  const bad = (cbp!==null && cbp>100);
+  const F=[];
+  if(r.vi>=M.f1Visa && (r.rn===0 || (cov!==null && cov<M.f1Cov))) F.push("F1");
+  if(r.rn===0 && r.vi>M.f2Visa) F.push("F2");
+  if(r.mc>M.f3Mc && rfp!==null && rfp<M.f3Rfnd) F.push("F3");
+  if(r.ax>=M.f4Brand || r.dc>=M.f4Brand) F.push("F4");
+  if(cbp!==null && cbp>M.f5Cbp && r.cb>=M.f5Cb) F.push("F5");
+  let base=0; F.forEach(f=>base+=M.w[f]);
+  let bon=0;
+  if(F.indexOf("F5")>=0 && !bad){
+    bon = cbp>M.bonHi ? M.bonHiPts : (cbp>=M.bonMid ? M.bonMidPts : 0);
+  }
+  const w = bad ? base : base+bon;
+  let pri=""; for(const s of SEVERITY){ if(F.indexOf(s)>=0){pri=s;break;} }
+  return Object.assign({}, r, {cbp,rfp,cov,mcs,zs,bad,F,nf:F.length,bon,w,pri});
+}
+function tierOf(e){
+  if(e.bad) return "QUARANTINE";
+  if(e.zs)  return "INTEGRITY";
+  if(e.nf===0) return "NONE";
+  return e.w>=MODEL.tierCrit ? "CRITICAL" : (e.w>=MODEL.tierHigh ? "HIGH" : "MONITOR");
+}
+function analyse(snap){
+  const E = snap.rows.map(score);
+  const ranked = E.filter(e=>e.nf>0 && !e.bad && !e.zs)
+                  .sort((a,b)=> b.w-a.w || b.cb-a.cb);
+  const crit  = ranked.filter(e=>e.w>=MODEL.tierCrit);
+  const high  = ranked.filter(e=>e.w>=MODEL.tierHigh && e.w<MODEL.tierCrit);
+  const mon   = ranked.filter(e=>e.w<MODEL.tierHigh);
+  const quar  = E.filter(e=>e.bad);
+  const integ = E.filter(e=>e.zs).sort((a,b)=>b.cb-a.cb);
+  const active= E.filter(e=>e.s>0||e.cb>0).length;
+  const flagCounts={};
+  ["F1","F2","F3","F4","F5"].forEach(f=>flagCounts[f]=E.filter(e=>e.F.indexOf(f)>=0).length);
+  const nfTiers={};
+  [1,2,3,4,5].forEach(k=>nfTiers[k]=E.filter(e=>e.nf>=k).length);
+  // buckets
+  const bm={};
+  E.forEach(e=>{
+    const x = bm[e.b] || (bm[e.b]={name:e.b,n:0,fl:0,zs:0,s:0,ds:0,dr:0,cb:0,rn:0,ax:0,vi:0,mc:0,dc:0});
+    x.n++; if(e.nf>0)x.fl++; if(e.zs)x.zs++;
+    x.s+=e.s; x.ds+=e.ds; x.dr+=e.dr; x.cb+=e.cb; x.rn+=e.rn;
+    x.ax+=e.ax; x.vi+=e.vi; x.mc+=e.mc; x.dc+=e.dc;
+  });
+  const buckets = Object.values(bm).filter(b=>b.cb>0).sort((a,b)=>b.cb-a.cb);
+  // merchants with multiple flagged MIDs
+  const mg={};
+  E.forEach(e=>{ if(e.nf>0){ (mg[e.m]||(mg[e.m]=[])).push(e); } });
+  const multi = Object.keys(mg).map(k=>({m:k,rows:mg[k]}))
+                  .filter(x=>x.rows.length>=2)
+                  .sort((a,b)=>b.rows.length-a.rows.length);
+  return {E,ranked,crit,high,mon,quar,integ,active,flagCounts,nfTiers,buckets,multi,
+          total:E.length, inert:E.length-active,
+          withCB:E.filter(e=>e.cb>0).length,
+          byMid:(function(){const o={};E.forEach(e=>o[e.id]=e);return o;})()};
+}
+
+/* ---------- verification: our % vs the portal's own % columns ---------- */
+function verify(A){
+  let checked=0, mismatch=[];
+  A.E.forEach(e=>{
+    if(e.pcbSrc && /\d/.test(e.pcbSrc) && e.cbp!==null){
+      const p=num(e.pcbSrc); checked++;
+      if(Math.abs(p-e.cbp)>0.006) mismatch.push(`${e.d} CB% ${e.cbp.toFixed(2)} vs portal ${e.pcbSrc}`);
+    }
+    if(e.prfSrc && /\d/.test(e.prfSrc) && e.rfp!==null){
+      const p=num(e.prfSrc); checked++;
+      if(Math.abs(p-e.rfp)>0.006) mismatch.push(`${e.d} Rfnd% ${e.rfp.toFixed(2)} vs portal ${e.prfSrc}`);
+    }
+  });
+  return {checked, mismatch};
+}
+
+/* ---------- action text ---------- */
+function actionFor(e){
+  const F=e.F, bits=[];
+  if(F.indexOf("F5")>=0) bits.push(e.cbp>5 ? "immediate review — reserve or volume cap" : "immediate review");
+  if(F.indexOf("F2")>=0) bits.push("enable RDR today (currently off)");
+  else if(F.indexOf("F1")>=0) bits.push("raise the RDR ceiling");
+  if(F.indexOf("F3")>=0) bits.push("Ethoca alerts + refund-policy and descriptor check");
+  if(F.indexOf("F4")>=0) bits.push("merchant-side remediation for Amex/Discover");
+  if(!bits.length) bits.push("monitor");
+  const s=bits.join("; ");
+  return s.charAt(0).toUpperCase()+s.slice(1)+".";
+}
+function triggerFor(e){
+  switch(e.pri){
+    case "F5": return `CB ${e.cbp.toFixed(2)}% on ${e.cb} CBs`;
+    case "F1": return `Visa ${e.vi} CBs at ${fmtP(e.cov)} RDR coverage`;
+    case "F3": return `MC ${e.mc} CBs on ${fmtP(e.rfp)} refunds`;
+    case "F4": {
+      const p=[]; if(e.ax>=MODEL.f4Brand)p.push("Amex "+e.ax);
+      if(e.dc>=MODEL.f4Brand)p.push("Disc "+e.dc); return p.join(" / ")+" CBs";
+    }
+    default:  return `Visa ${e.vi} CBs with RDR 0`;
+  }
+}
+
+
+/* ============================================================
+   BUCKET MULTI-SELECT — one selection shared by Audit and Trends,
+   so "I only care about these portfolios" holds wherever you look.
+   VIEW.buckets is null for "all", otherwise a Set of bucket names.
+   ============================================================ */
+function bucketStats(){
+  /* counts come from the report on screen, so the list shows what is
+     actually in front of you rather than a stale roster */
+  const A = window.__A;
+  const out = new Map();
+  if(A) A.E.forEach(e=>{
+    const x = out.get(e.b) || {name:e.b, n:0, flagged:0, cb:0, over:0};
+    x.n++; x.cb += e.cb;
+    if(e.nf>0) x.flagged++;
+    if(e.F.indexOf("F5")>=0) x.over++;
+    out.set(e.b, x);
+  });
+  return [...out.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
+function bucketsSelected(){ return VIEW.buckets; }        // null = all
+function bucketAllowed(name){
+  return !VIEW.buckets || VIEW.buckets.has(name);
+}
+function setBuckets(set){
+  const stats = bucketStats();
+  if(!set || set.size===0 || set.size===stats.length) VIEW.buckets = null;
+  else VIEW.buckets = set;
+}
+function bucketLabel(){
+  const stats = bucketStats();
+  if(!VIEW.buckets) return {text:"All buckets", count:stats.length, active:false};
+  if(VIEW.buckets.size===1) return {text:[...VIEW.buckets][0], count:1, active:true};
+  return {text:VIEW.buckets.size+" buckets selected", count:VIEW.buckets.size, active:true};
+}
+function bucketPickerHTML(){
+  const stats = bucketStats();
+  const lab = bucketLabel();
+  const q = (VIEW.bkQ||"").trim().toLowerCase();
+  const shown = q ? stats.filter(s=>s.name.toLowerCase().indexOf(q)>=0) : stats;
+  return `<div class="msel" id="bkMsel">
+    <button class="mselbtn${lab.active?" active":""}" id="bkBtn"
+        aria-expanded="${VIEW.bkOpen?"true":"false"}">
+      <span class="lbl">${esc(lab.text)}</span>
+      <span class="cnt">${lab.count}</span><span class="car">▾</span></button>
+    <div class="mselpanel${VIEW.bkOpen?" open":""}" id="bkPanel">
+      <input type="search" id="bkQ" placeholder="Search buckets…" value="${esc(VIEW.bkQ||"")}">
+      <div class="mselacts">
+        <button data-bk-act="all">Select all</button>
+        <button data-bk-act="none">Clear</button>
+        <button data-bk-act="cb">With chargebacks</button>
+        <button data-bk-act="flagged">With flagged MIDs</button>
+        <button data-bk-act="over">Over ceiling</button>
+        ${q?`<button data-bk-act="visible">Select these ${shown.length}</button>`:""}
+      </div>
+      <div class="mselist" id="bkList">
+        ${shown.length ? shown.map(s=>{
+          const on = bucketAllowed(s.name);
+          return `<label><input type="checkbox" data-bk="${esc(s.name)}"${on?" checked":""}>
+            <span class="bn">${esc(s.name)}</span>
+            <span class="meta">${s.n} MID${s.n===1?"":"s"}${
+              s.flagged?` · ${s.flagged} flagged`:""}${
+              s.over?` · <b>${s.over} over</b>`:""}${
+              s.cb?` · ${s.cb} CB`:""}</span></label>`;
+        }).join("") : `<div class="mselempty">No bucket matches “${esc(VIEW.bkQ)}”.</div>`}
+      </div>
+      <div class="mselfoot">${VIEW.buckets
+        ? `${VIEW.buckets.size} of ${stats.length} selected — applies to the Audit and Trends views.`
+        : `All ${stats.length} buckets shown. Tick a few to narrow both views.`}</div>
+    </div></div>`;
+}
+function wireBucketPicker(){
+  const btn=$("#bkBtn"), panel=$("#bkPanel");
+  if(!btn) return;
+  btn.onclick=e=>{
+    e.stopPropagation();
+    VIEW.bkOpen = !VIEW.bkOpen;
+    panel.classList.toggle("open", VIEW.bkOpen);
+    btn.setAttribute("aria-expanded", VIEW.bkOpen?"true":"false");
+    if(VIEW.bkOpen){ const q=$("#bkQ"); if(q) q.focus(); }
+  };
+  if(panel) panel.onclick=e=>e.stopPropagation();
+
+  const q=$("#bkQ");
+  if(q) q.oninput=()=>{
+    VIEW.bkQ=q.value;
+    clearTimeout(q._h);
+    q._h=setTimeout(()=>{ const pos=q.selectionStart; rerenderKeepPicker();
+      const again=$("#bkQ"); if(again){again.focus(); again.setSelectionRange(pos,pos);} },200);
+  };
+
+  document.querySelectorAll("[data-bk]").forEach(cb=>{
+    cb.onchange=()=>{
+      const stats=bucketStats();
+      const cur = VIEW.buckets ? new Set(VIEW.buckets) : new Set(stats.map(s=>s.name));
+      const name = cb.getAttribute("data-bk");
+      if(cb.checked) cur.add(name); else cur.delete(name);
+      setBuckets(cur);
+      rerenderKeepPicker();
+    };
+  });
+  document.querySelectorAll("[data-bk-act]").forEach(b=>{
+    b.onclick=()=>{
+      const stats=bucketStats();
+      const act=b.getAttribute("data-bk-act");
+      const qq=(VIEW.bkQ||"").trim().toLowerCase();
+      let set;
+      if(act==="all")          set=null;
+      else if(act==="none")    set=new Set();
+      else if(act==="cb")      set=new Set(stats.filter(s=>s.cb>0).map(s=>s.name));
+      else if(act==="flagged") set=new Set(stats.filter(s=>s.flagged>0).map(s=>s.name));
+      else if(act==="over")    set=new Set(stats.filter(s=>s.over>0).map(s=>s.name));
+      else if(act==="visible") set=new Set(stats.filter(s=>
+                                 s.name.toLowerCase().indexOf(qq)>=0).map(s=>s.name));
+      if(set===null){ VIEW.buckets=null; } else { setBuckets(set); }
+      rerenderKeepPicker();
+    };
+  });
+}
+/* re-render without losing the open panel, its search text or scroll */
+function rerenderKeepPicker(){
+  const list=$("#bkList");
+  const top = list ? list.scrollTop : 0;
+  render();
+  const l2=$("#bkList"); if(l2) l2.scrollTop = top;
+}
+document.addEventListener("click", ()=>{
+  if(VIEW.bkOpen){ VIEW.bkOpen=false;
+    const p=$("#bkPanel"); if(p) p.classList.remove("open");
+    const b=$("#bkBtn"); if(b) b.setAttribute("aria-expanded","false"); }
+});
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape" && VIEW.bkOpen){
+    VIEW.bkOpen=false;
+    const p=$("#bkPanel"); if(p) p.classList.remove("open");
+  }
+});
+function bucketChipHTML(){
+  if(!VIEW.buckets) return "";
+  const names=[...VIEW.buckets];
+  const shown = names.length<=2 ? names.join(", ") : names.length+" buckets";
+  return `<span class="chip" title="${esc(names.join(', '))}">${esc(shown)}
+    <button id="bkClear" title="Show all buckets">×</button></span>`;
+}
+
+/* ---------- filtering ---------- */
+function passFilter(e){
+  if(!bucketAllowed(e.b)) return false;
+  if(VIEW.q){
+    const q=VIEW.q.toLowerCase();
+    if((e.m+" "+e.d+" "+e.id+" "+e.b).toLowerCase().indexOf(q)<0) return false;
+  }
+  if(VIEW.tier!=="__all" && tierOf(e)!==VIEW.tier) return false;
+  return true;
+}
+
+
+
+
+
+/* ============================================================
+   SNAPSHOT LIBRARY — every loaded report is kept as a tab.
+
+   Persistence uses localStorage when the browser allows it, which
+   it does when this file is opened from disk or served from a host.
+   Some embedded/sandboxed viewers block storage; in that case the
+   library still works for the current session and the header says
+   so plainly, rather than pretending data was saved.
+   ============================================================ */
+const LS_KEY = "cbrc.library.v1";
+const FIELD_ORDER = ["b","m","d","id","s","ds","dr","cb","cv","rn","ax","vi","mc","dc","pcbSrc","prfSrc"];
+
+const STORE = (function(){
+  let ok=false;
+  try{
+    const k="__cbrc_probe";
+    window.localStorage.setItem(k,"1");
+    window.localStorage.removeItem(k);
+    ok=true;
+  }catch(e){ ok=false; }
+  const mem = {v:null};
+  return {
+    ok,
+    read(){
+      try{
+        const raw = ok ? window.localStorage.getItem(LS_KEY) : mem.v;
+        return raw ? JSON.parse(raw) : [];
+      }catch(e){ return []; }
+    },
+    write(list){
+      const raw = JSON.stringify(list);
+      if(!ok){ mem.v = raw; return {ok:true}; }
+      try{ window.localStorage.setItem(LS_KEY, raw); return {ok:true}; }
+      catch(e){ mem.v = raw; return {ok:false, err:e}; }
+    }
+  };
+})();
+
+let LIB = [];        // [{id,name,stamp,label,savedAt,rows:[[...]]}]
+let ACTIVE = null;   // id of the report currently on screen
+
+function packRows(rows){ return rows.map(r=>FIELD_ORDER.map(f=>r[f])); }
+function unpackRows(packed){
+  return packed.map(a=>{
+    const o={}; FIELD_ORDER.forEach((f,i)=>o[f]=a[i]);
+    return o;
+  });
+}
+function libLoad(){
+  LIB = STORE.read().filter(s=>s && s.rows && s.rows.length);
+  LIB.sort((a,b)=> String(b.stamp||b.savedAt||"").localeCompare(String(a.stamp||a.savedAt||"")));
+  if(LIB.length) ACTIVE = LIB[0].id;
+}
+function invalidateMH(){ if(typeof _HL!=="undefined") _HL = {}; }
+function libSave(){
+  if(typeof invalidateMH==="function") invalidateMH();
+  /* in folder mode the folder is the archive, so nothing is duplicated
+     into localStorage and the 5 MB quota never comes into play */
+  if(typeof folderMode==="function" && folderMode()){ STORE.write([]); return; }
+  const res = STORE.write(LIB);
+  if(!res.ok){
+    showErr("Ran out of browser storage, so the newest report is held for this session only. "
+      + "Close a few older tabs (the × on each) and add it again to keep it.");
+  }
+}
+function snapById(id){ return LIB.find(s=>s.id===id) || null; }
+function snapToSnapshot(s){
+  return s ? {name:s.name, stamp:s.stamp, rows:unpackRows(s.rows)} : null;
+}
+function syncActive(){
+  SNAP_A = snapToSnapshot(snapById(ACTIVE));
+  SNAP_B = null;
+  const on = !!SNAP_A;
+  ["#btnSheets","#btnCsv","#btnPrint"].forEach(s=>{const b=$(s); if(b) b.disabled=!on;});
+}
+
+function niceStamp(s){
+  if(!s || !/^\d{4}-\d{2}-\d{2}/.test(s)) return null;
+  const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const y=s.slice(0,4), mo=+s.slice(5,7), d=+s.slice(8,10), t=s.slice(11,16);
+  return {short:`${d} ${M[mo-1]}`, time:t, full:`${d} ${M[mo-1]} ${y} ${t}`};
+}
+
+function addSnapshot(snap){
+  const stamp = snap.stamp || null;
+  const id = (stamp || snap.name || "snap") + "|" + snap.rows.length;
+  const existing = LIB.findIndex(s=>s.id===id);
+  const rec = {id, name:snap.name, stamp, label:null,
+               savedAt:stamp||snap.name, rows:packRows(snap.rows)};
+  const wasThere = existing>=0;
+  if(wasThere) LIB[existing]=rec; else LIB.push(rec);
+  LIB.sort((a,b)=> String(b.stamp||b.savedAt||"").localeCompare(String(a.stamp||a.savedAt||"")));
+  libSave();
+  return {replaced:wasThere, id};
+}
+/* After a batch load, focus the newest report by its own timestamp —
+   never whichever file happened to finish reading last. */
+function focusNewest(ids){
+  const pool = ids && ids.length ? LIB.filter(s=>ids.indexOf(s.id)>=0) : LIB;
+  if(!pool.length) return;
+  ACTIVE = pool[0].id;                       // LIB is sorted newest-first
+}
+function removeSnapshot(id){
+  LIB = LIB.filter(s=>s.id!==id);
+  if(ACTIVE===id) ACTIVE = LIB[0] ? LIB[0].id : null;
+  libSave();
+}
+
+
+/* ---------- shared helpers for the trend views ---------- */
+function allSnapshotsChrono(){
+  return LIB.slice().sort((a,b)=>
+    String(a.stamp||a.savedAt||"").localeCompare(String(b.stamp||b.savedAt||"")));
+}
+function sparkSVG(vals, opts){
+  const o=opts||{};
+  const clean = vals.map(v=> v==null||isNaN(v) ? null : v);
+  const nums = clean.filter(v=>v!=null);
+  if(nums.length<2) return `<svg viewBox="0 0 100 38" preserveAspectRatio="none"></svg>`;
+  const min=Math.min(...nums), max=Math.max(...nums);
+  const span = (max-min)||1;
+  const n=clean.length;
+  const pts=[];
+  clean.forEach((v,i)=>{ if(v!=null) pts.push([(i/(n-1))*96+2, 34-((v-min)/span)*30]); });
+  const path = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length-1];
+  const col = o.color || "var(--accent)";
+  const thr = o.threshold;
+  let thrLine="";
+  if(thr!=null && thr>=min && thr<=max){
+    const y=(34-((thr-min)/span)*30).toFixed(1);
+    thrLine=`<line x1="2" x2="98" y1="${y}" y2="${y}" stroke="var(--crit)"
+      stroke-width="1" stroke-dasharray="3 2" opacity=".65"></line>`;
+  }
+  return `<svg viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true">
+    ${thrLine}
+    <path d="${path}" fill="none" stroke="${col}" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${col}"
+      stroke="var(--surface)" stroke-width="1.5"></circle>
+  </svg>`;
+}
+/* arrows read as risk, not direction: invertGood flips which way is bad
+   (falling sales is bad; falling chargebacks is good) */
+function deltaTag(cur, prev, invertGood){
+  if(prev==null||cur==null) return `<span class="dlt flat">no prior</span>`;
+  const d=cur-prev;
+  if(Math.abs(d)<1e-9) return `<span class="dlt flat">no change</span>`;
+  const worse = invertGood ? d<0 : d>0;
+  const cls = worse ? "up" : "down";
+  const arrow = d>0 ? "▲" : "▼";
+  return `<span class="dlt ${cls}">${arrow} ${Math.abs(d).toLocaleString("en-US",
+    {maximumFractionDigits:2})}</span>`;
+}
+
+/* ============================================================
+   FOLDER ACCESS — the archive lives in one folder you choose.
+
+   What the browser can and cannot do here, honestly:
+     • It CAN read every CSV in a folder you pick, and write files
+       back into it (Chrome and Edge, via showDirectoryPicker).
+     • It CANNOT watch the folder — nothing notifies a web page when
+       a file appears, so there is a Reload button.
+     • It CANNOT silently reopen the folder on a new visit. The handle
+       is remembered, but one click per visit is required. That is a
+       security boundary, not a setting.
+     • Firefox and Safari lack the API and fall back to a one-off
+       folder open.
+   ============================================================ */
+const FS_OK = typeof window.showDirectoryPicker === "function";
+const IDB_NAME = "cbrc.fs", IDB_STORE = "handles";
+
+function idb(){
+  return new Promise((res,rej)=>{
+    let req;
+    try{ req = indexedDB.open(IDB_NAME,1); }catch(e){ return rej(e); }
+    req.onupgradeneeded = () => {
+      const db=req.result;
+      if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function idbSet(k,v){
+  try{
+    const db=await idb();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(IDB_STORE,"readwrite");
+      tx.objectStore(IDB_STORE).put(v,k);
+      tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){ return false; }
+}
+async function idbGet(k){
+  try{
+    const db=await idb();
+    return new Promise((res)=>{
+      const tx=db.transaction(IDB_STORE,"readonly");
+      const rq=tx.objectStore(IDB_STORE).get(k);
+      rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null);
+    });
+  }catch(e){ return null; }
+}
+async function idbDel(k){
+  try{
+    const db=await idb();
+    return new Promise(res=>{
+      const tx=db.transaction(IDB_STORE,"readwrite");
+      tx.objectStore(IDB_STORE).delete(k);
+      tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);
+    });
+  }catch(e){ return false; }
+}
+
+const FOLDER = {
+  handle:null, name:null, state:"none", found:0, skipped:[],
+
+  /* audits are written into <folder>/audits/ so the tool never reads its
+     own output back in as a report, and the source folder stays exactly
+     as the portal left it */
+  AUDIT_DIR: "audits",
+  async auditDir(){
+    if(!this.handle) throw new Error("No folder connected.");
+    return this.handle.getDirectoryHandle(this.AUDIT_DIR, {create:true});
+  },
+
+  async pick(){
+    if(!FS_OK) throw new Error("This browser cannot open a folder handle.");
+    const h = await window.showDirectoryPicker({mode:"readwrite", id:"cbrc-reports"});
+    this.handle=h; this.name=h.name; this.state="connected";
+    await idbSet("dir", h);
+    return h;
+  },
+  async restore(){
+    if(!FS_OK) return false;
+    const h = await idbGet("dir");
+    if(!h) return false;
+    this.handle=h; this.name=h.name;
+    let perm="prompt";
+    try{ perm = await h.queryPermission({mode:"readwrite"}); }catch(e){ perm="prompt"; }
+    this.state = perm==="granted" ? "connected" : "needs-permission";
+    return true;
+  },
+  async grant(){
+    if(!this.handle) return false;
+    let perm="denied";
+    try{ perm = await this.handle.requestPermission({mode:"readwrite"}); }catch(e){ perm="denied"; }
+    this.state = perm==="granted" ? "connected" : "needs-permission";
+    return this.state==="connected";
+  },
+  async disconnect(){
+    this.handle=null; this.name=null; this.state="none"; this.found=0; this.skipped=[];
+    await idbDel("dir");
+  },
+
+  /* read every portal export in the folder. Subdirectories (including
+     audits/) are skipped, and our own audit files are ignored even if one
+     is sitting loose in the source folder. */
+  async scan(){
+    if(!this.handle || this.state!=="connected") return [];
+    const out=[], skipped=[];
+    for await (const entry of this.handle.values()){
+      if(entry.kind!=="file") continue;
+      if(!/\.csv$/i.test(entry.name)) continue;
+      try{
+        const f = await entry.getFile();
+        const text = await f.text();
+        const snap = loadSnapshot(text, entry.name);
+        if(snap.dateOnly && f.lastModified){
+          const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
+          snap.stamp = snap.stamp.slice(0,10)
+            + ` ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+        if(!snap.stamp && f.lastModified){
+          const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
+          snap.stamp = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} `
+                     + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+        out.push(snap);
+      }catch(e){
+        if(e && e.isAudit) continue;                 /* our own output — ignore */
+        skipped.push(entry.name+": "+(e.message||e));
+      }
+    }
+    this.found=out.length; this.skipped=skipped;
+    return out;
+  },
+  async writeFile(name, text){
+    if(!this.handle || this.state!=="connected") throw new Error("No folder connected.");
+    const dir = await this.auditDir();
+    const fh = await dir.getFileHandle(name, {create:true});
+    const w = await fh.createWritable();
+    await w.write(new Blob([text],{type:"text/csv"}));
+    await w.close();
+    return name;
+  }
+};
+
+/* ============================================================
+   THE DATA STRIP — one place, one primary action.
+
+   The model is deliberately singular: ONE folder is your archive.
+   Portal exports go in; audits are written to a subfolder inside it.
+   Everything the app knows comes from that folder, so there is no
+   second source of truth to reconcile.
+
+   Dropping loose files still works for one-offs and for browsers
+   without folder support; those are held for the session only.
+   ============================================================ */
+function newestSnap(){
+  return LIB.length ? LIB[0] : null;                 // LIB is sorted newest-first
+}
+function dataStripHTML(){
+  const n = LIB.length;
+  const newest = newestSnap();
+  const ns = newest ? niceStamp(newest.stamp) : null;
+  const tabs = n ? LIB.map(s=>{
+    const t=niceStamp(s.stamp);
+    const isA = s.id===ACTIVE;
+    return `<div class="tab${isA?" on":""}" data-snap="${esc(s.id)}"
+        title="${esc(s.name)}${t?" — "+t.full:""} · ${s.rows.length} MIDs">
+      <span class="dt">${t?esc(t.short):esc(s.name.slice(0,14))}</span>
+      <span class="sub">${t?esc(t.time):s.rows.length+" MIDs"}</span>
+      ${folderMode()?"":`<span class="x" data-del="${esc(s.id)}" title="Remove">&times;</span>`}
+    </div>`;
+  }).join("") : "";
+
+  /* ---- state 1: nothing set up yet ---- */
+  if(!FS_OK && !n){
+    return `<div class="data setup"><div class="drow">
+      <span class="dicon">&#128193;</span>
+      <div class="dmain"><div class="dtitle">Load your portal exports</div>
+        <div class="dsub">This browser cannot keep a folder connected, so open a folder of exports
+          or drop the files in. Chrome or Edge can remember the folder between visits.</div></div>
+      <div class="dacts"><button class="btn p big" id="btnDirFallback">Open a folder</button>
+        <button class="btn" id="btnPickFiles">Choose files</button></div></div>
+      <div class="dhint">Or drag CSV files anywhere on this page.</div></div>`;
+  }
+  if(FOLDER.state==="none" && !n){
+    return `<div class="data setup"><div class="drow">
+      <span class="dicon">&#128193;</span>
+      <div class="dmain"><div class="dtitle">Point this at your reports folder</div>
+        <div class="dsub">Exports in, audits out. Chosen once and remembered.</div></div>
+      <div class="dacts"><button class="btn p big" id="btnConnect">Choose folder</button></div>
+      </div>
+      <ol class="steps">
+        <li>Download the report from the portal with the green download icon.</li>
+        <li>Save it into <b>one folder</b> you keep for this — the filename already carries the date.</li>
+        <li>Choose that folder here. Every export in it becomes a tab, and audits you save go to
+            <code>audits/</code> inside it.</li>
+      </ol>
+      <div class="dhint">Prefer not to connect a folder? Drag CSV files anywhere on this page —
+        they are kept for this browser session only.</div></div>`;
+  }
+
+  /* ---- state 2: folder remembered, awaiting the once-per-visit click ---- */
+  if(FOLDER.state==="needs-permission"){
+    return `<div class="data"><div class="drow">
+      <span class="dicon">&#128193;</span>
+      <div class="dmain">
+        <div class="dtitle"><span class="dot wait"></span>${esc(FOLDER.name)}</div>
+        <div class="dsub">Remembered from last time. Browsers require one click per visit before a
+          page may reopen a folder — this is a security boundary, not a setting.</div></div>
+      <div class="dacts"><button class="btn p big" id="btnGrant">Reload folder</button>
+        <button class="btn" id="btnConnect">Change</button></div></div>
+      ${n?`<div class="dtabs">${tabs}</div>`:""}</div>`;
+  }
+
+  /* ---- state 3: connected ---- */
+  if(FOLDER.state==="connected"){
+    return `<div class="data"><div class="drow">
+      <span class="dicon">&#128193;</span>
+      <div class="dmain">
+        <div class="dtitle"><span class="dot on"></span>${esc(FOLDER.name)}
+          <span class="sub" style="font-weight:400;color:var(--muted);font-size:var(--fs-sm)">
+            ${FOLDER.found} export${FOLDER.found===1?"":"s"}${ns?` · newest ${esc(ns.full)}`:""}</span>
+        </div>
+        <div class="dsub">Audits save to <code>${esc(FOLDER.name)}/${FOLDER.AUDIT_DIR}/</code>
+          and are never read back in. Add a new export to the folder, then reload.</div></div>
+      <div class="dacts">
+        <button class="btn p" id="btnRescan">Reload</button>
+        <button class="btn" id="btnSaveFolder">Save audit</button>
+        <button class="btn" id="btnConnect">Change folder</button></div></div>
+      ${n?`<div class="dtabs">${tabs}</div>`:""}
+      <div class="dhint">Tabs come from the folder, so they return on every reload.
+        ${FOLDER.skipped.length?`<b>${FOLDER.skipped.length} file(s) could not be read.</b>`:""}</div>
+    </div>`;
+  }
+
+  /* ---- state 4: loose files only, no folder ---- */
+  return `<div class="data"><div class="drow">
+    <span class="dicon">&#128196;</span>
+    <div class="dmain">
+      <div class="dtitle"><span class="dot off"></span>${n} loose report${n===1?"":"s"}</div>
+      <div class="dsub">${STORE.ok
+        ? "Kept in this browser on this device. Connect a folder to build history that lives with the files."
+        : "Held for this session only — this viewer blocks browser storage."}</div></div>
+    <div class="dacts">
+      ${FS_OK?`<button class="btn p" id="btnConnect">Choose folder</button>`:""}
+      <button class="btn" id="btnPickFiles">Add files</button>
+      <button class="btn" id="btnClearLib">Remove all</button></div></div>
+    ${n?`<div class="dtabs">${tabs}</div>`:""}</div>`;
+}
+
+function renderDataStrip(){
+  const el=$("#datastrip"); if(!el) return;
+  el.innerHTML = dataStripHTML();
+  const on=(id,fn)=>{const b=$(id); if(b) b.onclick=fn;};
+  on("#btnConnect", connectFolder);
+  on("#btnRescan", loadFromFolder);
+  on("#btnSaveFolder", saveCurrentToFolder);
+  on("#btnPickFiles", ()=>$("#fileA").click());
+  on("#btnDirFallback", pickFolderFallback);
+  on("#btnGrant", async()=>{
+    if(await FOLDER.grant()) await loadFromFolder();
+    else showErr("Access to the folder was not granted, so nothing was loaded.");
+    renderDataStrip();
+  });
+  on("#btnClearLib", ()=>{
+    LIB=[]; ACTIVE=null; libSave();
+    renderDataStrip(); syncActive(); MT.sel=null; render();
+  });
+  document.querySelectorAll(".tab[data-snap]").forEach(t=>{
+    t.onclick=e=>{
+      if(e.target.hasAttribute("data-del")){
+        e.stopPropagation();
+        removeSnapshot(e.target.getAttribute("data-del"));
+        renderDataStrip(); syncActive(); render(); return;
+      }
+      ACTIVE = t.getAttribute("data-snap");
+      renderDataStrip(); syncActive(); render();
+    };
+  });
+}
+
+function folderMode(){ return FOLDER.state==="connected"; }
+
+async function loadFromFolder(){
+  const snaps = await FOLDER.scan();
+  if(!snaps.length){
+    showErr(`No CSV files found in “${esc(FOLDER.name||"that folder")}”.`
+      + (FOLDER.skipped.length ? " Skipped: "+esc(FOLDER.skipped.join("; ")) : ""));
+    renderDataStrip(); return 0;
+  }
+  LIB = [];
+  const ids=[];
+  snaps.forEach(s=>{ const r=addSnapshot(s); ids.push(r.id); });
+  focusNewest(ids);
+  renderDataStrip(); syncActive(); render();
+  if(FOLDER.skipped.length){
+    showErr(`Loaded ${snaps.length}, skipped ${FOLDER.skipped.length}: `
+      + FOLDER.skipped.join("; "));
+  } else clearErr();
+  toast(`${snaps.length} report${snaps.length===1?"":"s"} loaded from ${FOLDER.name}.`);
+  return snaps.length;
+}
+
+async function connectFolder(){
+  try{
+    await FOLDER.pick();
+    await loadFromFolder();
+  }catch(e){
+    if(e && e.name==="AbortError") return;      // user closed the picker
+    showErr("Could not open that folder: " + (e.message||e));
+    renderDataStrip();
+  }
+}
+
+/* fallback: <input webkitdirectory> reads a folder once, no handle kept */
+function pickFolderFallback(){ $("#fileDir").click(); }
+
+async function saveCurrentToFolder(){
+  if(!folderMode()){ showErr("Connect a folder first."); return; }
+  const set = exportSet("all");
+  const name = auditFileName();
+  let existed = false;
+  try{
+    await FOLDER.handle.getFileHandle(name, {create:false});
+    existed = true;
+  }catch(e){ existed = false; }          /* NotFoundError = new file */
+  try{
+    await FOLDER.writeFile(name, "﻿"+toCSV(set));
+    toast(existed
+      ? `Replaced ${name} in ${FOLDER.name} (${set.rows.length} rows).`
+      : `Saved ${name} to ${FOLDER.name} (${set.rows.length} rows).`);
+    renderDataStrip();
+  }catch(e){ showErr("Could not write to the folder: " + (e.message||e)); }
+}
+
+/* ============================================================
+   HISTORY AT ANY LEVEL — bucket, merchant or individual MID.
+
+   Aggregates are built by summing the raw portal fields for the
+   group and then running the same score() over the total, so a
+   bucket's CB % is its real pooled rate rather than an average of
+   averages. One pass per snapshot, cached against the library and
+   the scoring model.
+   ============================================================ */
+let _HL = {};                        // cache per level
+const LEVELS = [["bucket","Buckets"],["merch","Merchants"],["mid","MIDs"]];
+
+function levelKey(r, level){
+  return level==="mid" ? r.id : (level==="merch" ? r.m : r.b);
+}
+function historyAt(level){
+  const sig = LIB.map(s=>s.id).join("|") + "::" + JSON.stringify(MODEL);
+  if(_HL[level] && _HL[level].sig===sig) return _HL[level].data;
+  const snaps = allSnapshotsChrono();
+  const stamps = snaps.map(s=>s.stamp||s.name);
+  const map = new Map();
+  snaps.forEach((s,si)=>{
+    const groups = new Map();
+    unpackRows(s.rows).forEach(raw=>{
+      const e = score(raw);
+      const k = levelKey(e, level);
+      let g = groups.get(k);
+      if(!g){
+        g = {k, b:e.b, m:e.m, d:e.d, id:e.id, n:0, over:0, flagged:0, bset:new Set(),
+             s:0, ds:0, dr:0, cb:0, cv:0, rn:0, ax:0, vi:0, mc:0, dc:0};
+        groups.set(k,g);
+      }
+      g.n++; g.bset.add(e.b);
+      if(e.F.indexOf("F5")>=0) g.over++;
+      if(e.nf>0) g.flagged++;
+      ["s","ds","dr","cb","cv","rn","ax","vi","mc","dc"].forEach(f=>g[f]+=e[f]);
+      if(level!=="mid"){ g.d = g.n+" MID"+(g.n===1?"":"s"); g.id="—"; }
+    });
+    groups.forEach((g,k)=>{
+      const agg = score({b:g.b, m:g.m, d:g.d, id:g.id, s:g.s, ds:g.ds, dr:g.dr,
+                         cb:g.cb, cv:g.cv, rn:g.rn, ax:g.ax, vi:g.vi, mc:g.mc, dc:g.dc,
+                         pcbSrc:"", prfSrc:""});
+      let rec = map.get(k);
+      if(!rec){
+        rec = {key:k, level, m:g.m, d:g.d, b:g.b, id:g.id, bset:[],
+               pts:new Array(snaps.length).fill(null)};
+        map.set(k, rec);
+      }
+      rec.m=g.m; rec.d=g.d; rec.b=g.b; rec.id=g.id;
+      rec.bset = [...new Set(rec.bset.concat([...g.bset]))];
+      rec.pts[si] = {s:agg.s, ds:agg.ds, cb:agg.cb, cv:agg.cv, cbp:agg.cbp, rfp:agg.rfp,
+                     cov:agg.cov, w:agg.w, tier:tierOf(agg),
+                     f5:agg.F.indexOf("F5")>=0, zs:agg.zs, nf:agg.nf,
+                     nmids:g.n, over:g.over, flagged:g.flagged};
+    });
+  });
+  const rows=[];
+  map.forEach(rec=>{
+    const seen = rec.pts.filter(Boolean);
+    if(!seen.length) return;
+    const first=seen[0], last=seen[seen.length-1];
+    rec.n = seen.length; rec.first=first; rec.last=last;
+    rec.everFlagged = seen.some(p=>p.nf>0 || p.flagged>0);
+    rec.everCB = seen.some(p=>p.cb>0);
+    rec.dcb  = last.cb - first.cb;
+    rec.dsal = last.s - first.s;
+    rec.dcbp = (last.cbp!=null && first.cbp!=null) ? last.cbp - first.cbp : null;
+    rec.dover = last.over - first.over;
+    if(rec.n===1){
+      /* one report means no trend to read; label the point in time honestly
+         rather than implying movement that has not been observed */
+      if(level==="mid"){
+        if(last.zs)        rec.status=["No sales","mut"];
+        else if(last.f5)   rec.status=["Over ceiling","bad"];
+        else if(last.nf>0) rec.status=["Flagged, not on rate","warn"];
+        else               rec.status=["Not flagged","mut"];
+      } else {
+        rec.status = last.over>0 ? [last.over+" over ceiling","bad"]
+                                 : ["None over ceiling","mut"];
+      }
+    }
+    else if(level==="mid"){
+      if(last.zs)                    rec.status=["No sales","mut"];
+      else if(!rec.everFlagged)      rec.status=["Never flagged","mut"];
+      else if(last.f5 && !first.f5)  rec.status=["Newly over ceiling","new"];
+      else if(!last.f5 && first.f5)  rec.status=["Back under ceiling","fix"];
+      else if(last.f5 && first.f5)   rec.status=["Still over ceiling","bad"];
+      else if(last.nf>0)             rec.status=["Flagged, not on rate","warn"];
+      else                           rec.status=["Cleared","fix"];
+    } else {
+      /* for a group, the honest question is how many of its MIDs sit
+         over the ceiling and whether that count is falling */
+      if(last.over===0 && first.over===0) rec.status=["None over ceiling","mut"];
+      else if(last.over===0)              rec.status=["All cleared","fix"];
+      else if(last.over < first.over)     rec.status=[`Improving · ${last.over} over`,"fix"];
+      else if(last.over > first.over)     rec.status=[`Worsening · ${last.over} over`,"new"];
+      else                                rec.status=[`Flat · ${last.over} over`,"bad"];
+    }
+    rows.push(rec);
+  });
+  _HL[level] = {sig, data:{stamps, rows}};
+  return _HL[level].data;
+}
+function invalidateHL(){ _HL = {}; }
+
+/* ============================================================
+   PER-MID TREND — every MID as one row across every report in the
+   library, so you can see whether a problem is actually closing.
+
+   Built in a single pass over all snapshots and cached against the
+   library composition plus the scoring model, because changing a
+   threshold has to invalidate it.
+   ============================================================ */
+let MT = {level:"mid", scope:"flagged", sort:"dcbp", dir:-1, q:"", limit:250, sel:null};
+function midHistory(){ return historyAt(MT.level); }
+
+function miniSpark(vals, color, threshold){
+  const clean = vals.map(v=> (v==null||isNaN(v)) ? null : v);
+  const nums = clean.filter(v=>v!=null);
+  if(nums.length<2) return `<svg viewBox="0 0 100 30" preserveAspectRatio="none"></svg>`;
+  const min=Math.min(...nums), max=Math.max(...nums), span=(max-min)||1, n=clean.length;
+  const pts=[];
+  clean.forEach((v,i)=>{ if(v!=null) pts.push([(i/(n-1))*96+2, 26-((v-min)/span)*22]); });
+  const path = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length-1];
+  let thr="";
+  if(threshold!=null && threshold>=min && threshold<=max){
+    const y=(26-((threshold-min)/span)*22).toFixed(1);
+    thr=`<line x1="2" x2="98" y1="${y}" y2="${y}" stroke="var(--crit)" stroke-width="1"
+      stroke-dasharray="3 2" opacity=".6"></line>`;
+  }
+  return `<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">${thr}
+    <path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.4" fill="${color}"
+      stroke="var(--surface)" stroke-width="1.4"></circle></svg>`;
+}
+function dNum(v,dp,invertGood,single){
+  if(single) return `<span class="dcell flat" title="Only one report loaded">—</span>`;
+  if(v==null) return `<span class="dcell flat">—</span>`;
+  if(Math.abs(v)<(dp?0.005:0.5)) return `<span class="dcell flat">0</span>`;
+  const worse = invertGood ? v<0 : v>0;
+  return `<span class="dcell ${worse?"up":"down"}">${v>0?"+":"−"}${
+    Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:dp||0,maximumFractionDigits:dp||0})
+  }${dp===2?"%":""}</span>`;
+}
+
+
+/* ---------- the Trends view ---------- */
+function mtRows(){
+  const H = historyAt(MT.level);
+  let rows = H.rows;
+  if(MT.level==="mid"){
+    if(MT.scope==="flagged")    rows = rows.filter(r=>r.everFlagged);
+    else if(MT.scope==="cb")    rows = rows.filter(r=>r.everCB);
+    else if(MT.scope==="open")  rows = rows.filter(r=>r.status[1]==="bad"||r.status[1]==="new");
+    else if(MT.scope==="fixed") rows = rows.filter(r=>r.status[1]==="fix");
+  } else {
+    if(MT.scope==="flagged"||MT.scope==="cb") rows = rows.filter(r=>r.everCB);
+    else if(MT.scope==="open")  rows = rows.filter(r=>r.last.over>0);
+    else if(MT.scope==="fixed") rows = rows.filter(r=>r.status[1]==="fix");
+  }
+  if(VIEW.buckets){
+    rows = rows.filter(r=> MT.level==="bucket"
+      ? VIEW.buckets.has(r.key)
+      : (r.bset ? r.bset.some(b=>VIEW.buckets.has(b)) : VIEW.buckets.has(r.b)));
+  }
+  if(MT.q.trim()){
+    const q=MT.q.trim().toLowerCase();
+    rows = rows.filter(r=>(r.m+" "+r.d+" "+r.id+" "+r.b+" "+r.key).toLowerCase().indexOf(q)>=0);
+  }
+  const key=MT.sort, dir=MT.dir;
+  rows = rows.slice().sort((a,b)=>{
+    const get = r => {
+      switch(key){
+        case "dcbp":  return r.dcbp==null?-Infinity:r.dcbp;
+        case "dcb":   return r.dcb;
+        case "cbp":   return r.last.cbp==null?-Infinity:r.last.cbp;
+        case "cb":    return r.last.cb;
+        case "s":     return r.last.s;
+        case "dsal":  return r.dsal;
+        case "over":  return r.last.over;
+        case "dover": return r.dover;
+        case "name":  return String(r.level==="mid"?r.m:r.key).toLowerCase();
+        default:      return r.last.w;
+      }
+    };
+    const x=get(a), y=get(b);
+    if(typeof x==="string") return dir*x.localeCompare(y);
+    return dir*(x-y) || (b.last.cb-a.last.cb);
+  });
+  return {all:rows, shown:rows.slice(0,MT.limit), stamps:H.stamps};
+}
+
+function trendsPageHTML(){
+  const H = historyAt(MT.level);
+  const nRep = H.stamps.length;
+  const {all, shown} = mtRows();
+  const isMid = MT.level==="mid";
+  const counts = (()=>{ const c={bad:0,new:0,fix:0,warn:0,mut:0};
+    H.rows.forEach(r=>c[r.status[1]]++); return c; })();
+  const scopeOpts = isMid
+    ? [["flagged","Flagged in any report"],["cb","Any chargebacks"],
+       ["open","Still over / newly over"],["fixed","Back under ceiling"],["all","Every MID"]]
+    : [["cb","With chargebacks"],["open","Any MID over ceiling"],
+       ["fixed","Improving or cleared"],["all",MT.level==="bucket"?"Every bucket":"Every merchant"]];
+  const sortOpts = (isMid
+    ? [["dcbp","Δ CB % — worst first"],["dcb","Δ CB # — worst first"],["cbp","Current CB %"],
+       ["cb","Current CB #"],["s","Current volume"],["dsal","Δ volume"],["name","Name"]]
+    : [["over","MIDs over ceiling"],["dover","Δ MIDs over ceiling"],["dcbp","Δ CB %"],
+       ["dcb","Δ CB #"],["cbp","Current CB %"],["cb","Current CB #"],
+       ["s","Current volume"],["name","Name"]]);
+  if(!sortOpts.some(o=>o[0]===MT.sort)) MT.sort = sortOpts[0][0];
+  if(!scopeOpts.some(o=>o[0]===MT.scope)) MT.scope = scopeOpts[0][0];
+
+  const legend = nRep<2
+    ? (isMid
+      ? `<span><span class="st bad"><span class="dot"></span>Over ceiling</span> ${counts.bad}</span>
+         <span><span class="st warn"><span class="dot"></span>Flagged, not on rate</span> ${counts.warn}</span>
+         <span><span class="st mut"><span class="dot"></span>Not flagged / no sales</span> ${counts.mut}</span>`
+      : `<span><span class="st bad"><span class="dot"></span>Has MIDs over ceiling</span> ${counts.bad}</span>
+         <span><span class="st mut"><span class="dot"></span>None over ceiling</span> ${counts.mut}</span>`)
+    : (isMid
+      ? `<span><span class="st bad"><span class="dot"></span>Still over ceiling</span> ${counts.bad}</span>
+         <span><span class="st new"><span class="dot"></span>Newly over</span> ${counts.new}</span>
+         <span><span class="st fix"><span class="dot"></span>Back under / cleared</span> ${counts.fix}</span>
+         <span><span class="st warn"><span class="dot"></span>Flagged, not on rate</span> ${counts.warn}</span>`
+      : `<span><span class="st new"><span class="dot"></span>Worsening</span> ${counts.new}</span>
+         <span><span class="st bad"><span class="dot"></span>Flat</span> ${counts.bad}</span>
+         <span><span class="st fix"><span class="dot"></span>Improving / cleared</span> ${counts.fix}</span>
+         <span><span class="st mut"><span class="dot"></span>None over ceiling</span> ${counts.mut}</span>`);
+
+  return portfolioTrendHTML() + `
+    <h2 id="s-midtrend">Trends
+      <span class="n">${all.length} ${MT.level==="bucket"?"bucket":MT.level==="merch"?"merchant":"MID"}${all.length===1?"":"s"} × ${nRep} report${nRep===1?"":"s"}</span>
+      <button class="cp" data-copy="midtrend">Copy</button>
+      <button class="cp" data-copy="midmatrix">Copy CB % matrix</button></h2>
+    <p class="lede">One line per ${MT.level==="bucket"?"bucket":MT.level==="merch"?"merchant":"MID"},
+      ${nRep<2?"showing current values from the single loaded report":"oldest report to newest"}. ${isMid
+        ? `Status judges movement against the ${MODEL.f5Cbp}% ceiling — the threshold the card brands
+           act on — so <em>Back under ceiling</em> means the problem genuinely closed.`
+        : `A group's CB % is its pooled rate (total chargebacks ÷ total sales), not an average of its
+           MIDs, so large MIDs dominate it as they should. Status tracks <em>how many of its MIDs sit
+           over the ${MODEL.f5Cbp}% ceiling</em> and whether that count is falling — the clearest read
+           on whether a bucket is being fixed.`}
+      Click any row to open its full history.</p>
+    <div class="legendrow">${legend}</div>
+    ${nRep<2?`<div class="onerep"><b>One report loaded — no trend lines yet.</b>
+      Everything below is still searchable and shows current values; add earlier exports as tabs, or
+      connect a folder, and each becomes a point on the line with Δ columns filled in.</div>`:""}
+    <div class="mtctrl">
+      <label>Buckets</label>
+      ${bucketPickerHTML()}
+      <label>Level</label>
+      <span class="seg">${LEVELS.map(([v,l])=>
+        `<button data-lvl="${v}" class="${MT.level===v?"on":""}">${l}</button>`).join("")}</span>
+      <label for="mtScope">Show</label>
+      <select id="mtScope">${scopeOpts.map(([v,l])=>
+        `<option value="${v}"${MT.scope===v?" selected":""}>${l}</option>`).join("")}</select>
+      <label for="mtSort">Sort</label>
+      <select id="mtSort">${sortOpts.map(([v,l])=>
+        `<option value="${v}"${MT.sort===v?" selected":""}>${l}</option>`).join("")}</select>
+      <span class="searchwrap"><label for="mtQ">Search</label>
+        <input type="search" id="mtQ" value="${esc(MT.q)}"
+          placeholder="${MT.level==="mid"?"merchant, DBA or MID…":MT.level==="merch"?"merchant name…":"bucket name…"}">
+        ${MT.q?`<button class="btn sm" id="mtClear">clear</button>`:""}</span>
+      ${bucketChipHTML()}
+      <span class="note" style="margin:0">${all.length>shown.length
+        ? `showing ${shown.length} of ${all.length}` : `${all.length} rows`}</span>
+    </div>
+    <div class="scroll"><table class="mt"><thead><tr>
+      <th class="na">${isMid?"MID":MT.level==="merch"?"Merchant":"Bucket"}</th>
+      <th class="na">Status</th><th class="n na">Rep</th>
+      ${isMid?"":'<th class="na">MIDs over ceiling</th><th class="n na">Δ</th>'}
+      <th class="na">Transaction volume</th><th class="n na">Δ</th>
+      <th class="na">CB #</th><th class="n na">Δ</th>
+      <th class="na">CB %</th><th class="n na">Δ</th>
+      ${isMid?'<th class="na">Bucket</th>':""}</tr></thead><tbody>
+      ${shown.map(r=>{
+        const sal=r.pts.map(p=>p?p.s:null), cbs=r.pts.map(p=>p?p.cb:null),
+              cbp=r.pts.map(p=>p?p.cbp:null), ovr=r.pts.map(p=>p?p.over:null);
+        const who = isMid
+          ? `<span class="nm">${esc(r.m)}</span><br><span class="dba">${esc(r.d)}</span>
+             <span class="mid">${esc(r.id)}</span>`
+          : `<span class="nm">${esc(r.key)}</span><br>
+             <span class="grp">${r.last.nmids} MID${r.last.nmids===1?"":"s"} ·
+             ${r.last.flagged} flagged</span>`;
+        const selCls = (MT.sel && MT.sel.level===r.level && MT.sel.key===r.key) ? " class=\"sel\"" : "";
+        return `<tr${selCls} data-row="${esc(r.key)}">
+          <td class="who">${who}</td>
+          <td><span class="st ${r.status[1]}"><span class="dot"></span>${esc(r.status[0])}</span></td>
+          <td class="n">${r.n}</td>
+          ${isMid?"":`<td><span class="mini">${miniSpark(ovr,"var(--crit)")}
+            <span class="v">${r.last.over}<small>${r.n<2?"&nbsp;":"from "+r.first.over}</small></span></span></td>
+            <td class="n">${dNum(r.dover,0,false,r.n<2)}</td>`}
+          <td><span class="mini">${miniSpark(sal,"var(--accent)")}
+            <span class="v">${fmtN(r.last.s)}<small>${r.n<2?"&nbsp;":"from "+fmtN(r.first.s)}</small></span></span></td>
+          <td class="n">${dNum(r.dsal,0,true,r.n<2)}</td>
+          <td><span class="mini">${miniSpark(cbs,"var(--crit)")}
+            <span class="v">${r.last.cb}<small>${r.n<2?"&nbsp;":"from "+r.first.cb}</small></span></span></td>
+          <td class="n">${dNum(r.dcb,0,false,r.n<2)}</td>
+          <td><span class="mini">${miniSpark(cbp,"var(--serious)",MODEL.f5Cbp)}
+            <span class="v">${r.last.cbp==null?"—":r.last.cbp.toFixed(2)+"%"}
+              <small>${r.n<2?"&nbsp;":(r.first.cbp==null?"—":"from "+r.first.cbp.toFixed(2)+"%")}</small></span></span></td>
+          <td class="n">${dNum(r.dcbp,2,false,r.n<2)}</td>
+          ${isMid?`<td>${esc(r.b)}</td>`:""}
+        </tr>`;
+      }).join("")}
+    </tbody></table></div>
+    <p class="note">Δ compares the newest report with the oldest one containing that row, so
+      something that only appears recently is measured over its own span — Rep says how many points
+      back it. Red means the number moved the wrong way for risk: rising chargebacks, rising rate,
+      or falling volume.${all.length>shown.length
+      ? ` Only the first ${shown.length} rows are drawn to keep the page responsive; the Copy buttons
+        export all ${all.length}.` : ""}</p>
+    ${detailCardHTML()}`;
+}
+
+/* ---------- drill-down detail, works at every level ---------- */
+function detailCardHTML(){
+  if(!MT.sel) return "";
+  const H = historyAt(MT.sel.level);
+  const rec = H.rows.find(r=>r.key===MT.sel.key);
+  if(!rec) return `<div class="mcard"><p class="note">That row is not in the current library.</p></div>`;
+  const pts = rec.pts, stamps = H.stamps;
+  const last = rec.last, prev = (()=>{ const s=pts.filter(Boolean); return s.length>1?s[s.length-2]:null; })();
+  const isMid = rec.level==="mid";
+  const head = isMid
+    ? `<span class="nm">${esc(rec.m)}</span><span class="dba">— ${esc(rec.d)}</span>
+       <span class="mid">${esc(rec.id)}</span><span class="badge">${esc(rec.b)}</span>`
+    : `<span class="nm">${esc(rec.key)}</span>
+       <span class="dba">— ${last.nmids} MID${last.nmids===1?"":"s"}, ${last.flagged} flagged,
+       ${last.over} over ceiling</span>`;
+  const cards = [
+    {lab:"CB %", now:last.cbp==null?"no sales":last.cbp.toFixed(2)+"%",
+     cur:last.cbp, pv:prev?prev.cbp:null, vals:pts.map(p=>p?p.cbp:null), thr:MODEL.f5Cbp, inv:false},
+    {lab:"Chargebacks", now:fmtN(last.cb), cur:last.cb, pv:prev?prev.cb:null,
+     vals:pts.map(p=>p?p.cb:null), inv:false},
+    {lab:"Transaction volume", now:fmtN(last.s), cur:last.s, pv:prev?prev.s:null,
+     vals:pts.map(p=>p?p.s:null), inv:true},
+    isMid
+      ? {lab:"Refund %", now:last.rfp==null?"n/a":last.rfp.toFixed(1)+"%", cur:last.rfp,
+         pv:prev?prev.rfp:null, vals:pts.map(p=>p?p.rfp:null), inv:true}
+      : {lab:"MIDs over ceiling", now:String(last.over), cur:last.over,
+         pv:prev?prev.over:null, vals:pts.map(p=>p?p.over:null), inv:false}
+  ];
+  return `<div class="mcard" id="detail">
+    <div class="mhead">${head}
+      <button class="close" id="btnCopyDetail" style="margin-left:auto">Copy history</button>
+      <button class="close" id="mClose">Close</button></div>
+    <div class="sparks">${cards.map(c=>`<div class="spark">
+      <div class="lab">${esc(c.lab)}</div><div class="now">${c.now}</div>
+      ${deltaTag(c.cur, c.pv, c.inv)}
+      ${sparkSVG(c.vals,{threshold:c.thr, color:"var(--accent)"})}</div>`).join("")}</div>
+    <div class="scroll"><table><thead><tr>
+      <th class="na">Report</th>${isMid?'<th class="n na">Weighted</th><th class="na">Tier</th>'
+        :'<th class="n na">MIDs</th><th class="n na">Flagged</th><th class="n na">Over ceiling</th>'}
+      <th class="n na"># Sales</th><th class="n na">$ Sales</th><th class="n na">CB #</th>
+      <th class="n na">CB Volume</th><th class="n na">CB %</th>${isMid?'<th class="n na">Refund %</th>':""}
+      </tr></thead><tbody>
+      ${pts.map((p,i)=>({p,i})).filter(x=>x.p).reverse().map(({p,i})=>{
+        const n=niceStamp(stamps[i]);
+        return `<tr><td>${n?esc(n.full):esc(String(stamps[i]))}</td>
+          ${isMid?`<td class="n"><strong>${p.w}</strong></td><td>${p.tier}</td>`
+            :`<td class="n">${p.nmids}</td><td class="n">${p.flagged}</td>
+              <td class="n"><strong>${p.over}</strong></td>`}
+          <td class="n">${fmtN(p.s)}</td><td class="n">${fmtM(p.ds,0)}</td>
+          <td class="n">${p.cb}</td><td class="n">${fmtM(p.cv,0)}</td>
+          <td class="n">${p.cbp==null?"no sales":p.cbp.toFixed(2)+"%"}</td>
+          ${isMid?`<td class="n">${fmtP(p.rfp)}</td>`:""}</tr>`;
+      }).join("")}
+    </tbody></table></div>
+    <p class="note">${pts.filter(Boolean).length} of ${stamps.length} reports contain this row.
+      ${isMid?"":"Group figures are pooled totals, so CB % is total chargebacks over total sales."}
+      Arrows read as risk: red means the number moved the wrong way.</p>
+  </div>`;
+}
+
+
+/* ============================================================
+   SETTINGS — scoring model, appearance, export layout.
+   Kept off the working views so the audit stays uncluttered.
+   ============================================================ */
+const FLAG_INFO = {
+  F5:{name:"Realized damage", w:"w.F5",
+      action:"Immediate review; consider reserve or volume cap."},
+  F1:{name:"Visa disputes not being deflected", w:"w.F1",
+      action:"Enable RDR or raise the RDR ceiling. The most fixable flag."},
+  F3:{name:"Mastercard disputes with thin refunds", w:"w.F3",
+      action:"Ethoca alerts, refund-policy review, descriptor and fulfilment check."},
+  F4:{name:"Uncovered Amex / Discover losses", w:"w.F4",
+      action:"Merchant-side remediation only — RDR does not reach these brands."},
+  F2:{name:"RDR switched off entirely", w:"w.F2",
+      action:"Enable RDR immediately."}
+};
+function numIn(path, val, step, width){
+  return `<input type="number" data-m="${path}" value="${val}" step="${step||1}"
+    ${width?`style="width:${width}px"`:""}>`;
+}
+function flagRuleHTML(code){
+  const M=MODEL;
+  switch(code){
+    case "F5": return `CB % above ${numIn("f5Cbp",M.f5Cbp,0.1)} <span class="op">%</span>
+      and at least ${numIn("f5Cb",M.f5Cb,1)} chargebacks`;
+    case "F1": return `Visa chargebacks at least ${numIn("f1Visa",M.f1Visa,1)}
+      <span class="op">and</span> RDR is off <span class="op">or</span> coverage below
+      ${numIn("f1Cov",M.f1Cov,1)} <span class="op">%</span>`;
+    case "F3": return `Mastercard chargebacks above ${numIn("f3Mc",M.f3Mc,1)}
+      <span class="op">and</span> refund rate below ${numIn("f3Rfnd",M.f3Rfnd,1)}
+      <span class="op">%</span>`;
+    case "F4": return `Amex <span class="op">or</span> Discover chargebacks at least
+      ${numIn("f4Brand",M.f4Brand,1)}`;
+    case "F2": return `RDR is off <span class="op">and</span> Visa chargebacks above
+      ${numIn("f2Visa",M.f2Visa,1)}`;
+  }
+  return "";
+}
+function modelPanelHTML(A){
+  const M=MODEL;
+  const order=["F5","F1","F3","F4","F2"];
+  const cards = order.map(code=>{
+    const info=FLAG_INFO[code];
+    const hits = A ? A.flagCounts[code] : 0;
+    return `<div class="flagcard">
+      <div class="code">${code}</div>
+      <div>
+        <div class="nm">${esc(info.name)}</div>
+        <div class="rule">${flagRuleHTML(code)}</div>
+        <div class="act">&rarr; ${esc(info.action)}</div>
+      </div>
+      <div class="side">
+        <div class="wlab">Weight</div>
+        ${numIn(info.w, M.w[code], 1)}
+        <div class="hits">${hits?`<b>${hits}</b> MID${hits===1?"":"s"}`:"0 MIDs"} today</div>
+      </div>
+    </div>`;
+  }).join("");
+  const live = A ? `<div class="livepv">
+      <span>With these settings: <b>${A.crit.length}</b> act today</span>
+      <span><b>${A.high.length}</b> high</span>
+      <span><b>${A.mon.length}</b> monitor</span>
+      <span><b>${A.integ.length}</b> integrity</span>
+      <span><b>${A.quar.length}</b> quarantine</span>
+    </div>` : "";
+  return `<h2 id="s-model">Scoring model
+      <span class="n">changes apply immediately</span></h2>
+    <p class="setintro">Each flag has a weight and its own thresholds. A MID's score is the sum of the
+      weights it trips, plus a bonus for how far past the CB % ceiling it sits — which is what makes
+      realized damage outrank a row that merely trips more flags. Nothing here changes the underlying
+      figures, only how they are ranked.</p>
+    ${cards}
+    <div class="setblock">
+      <h4>CB % magnitude bonus <span class="out">— added to F5 rows only</span></h4>
+      <div class="setrow">CB % above ${numIn("bonHi",M.bonHi,0.5)} <span class="op">%</span>
+        adds ${numIn("bonHiPts",M.bonHiPts,1)} points</div>
+      <div class="setrow">CB % above ${numIn("bonMid",M.bonMid,0.5)} <span class="op">%</span>
+        adds ${numIn("bonMidPts",M.bonMidPts,1)} points</div>
+      <div class="setrow"><span class="out">Anything lower adds nothing, and a row above 100% CB gets
+        no bonus at all — bad data must not outrank real damage.</span></div>
+    </div>
+    <div class="setblock">
+      <h4>Tier cutoffs</h4>
+      <div class="setrow"><span class="badge"><span class="dot d-c"></span>Act today</span>
+        at weighted ${numIn("tierCrit",M.tierCrit,1)} and above</div>
+      <div class="setrow"><span class="badge"><span class="dot d-h"></span>High</span>
+        at weighted ${numIn("tierHigh",M.tierHigh,1)} and above</div>
+      <div class="setrow"><span class="badge"><span class="dot d-m"></span>Monitor</span>
+        <span class="out">everything else with at least one flag</span></div>
+      ${live}
+      <div class="setacts">
+        <button class="btn sm" id="btnModelReset">Reset model to defaults</button>
+      </div>
+    </div>
+    <p class="note">F2 deliberately overlaps F1: a MID with Visa disputes and no RDR at all trips
+      both, and that overlap is what escalates it. Severity order for the Primary column is
+      F5 &gt; F1 &gt; F3 &gt; F4 &gt; F2. Zero-sale rows are excluded from ranking entirely, because
+      CB % cannot be computed for them.</p>`;
+}
+const MODEL_DEFAULTS = JSON.parse(JSON.stringify({
+  w:{F1:4,F2:1,F3:3,F4:2,F5:10},
+  f1Visa:5, f1Cov:50, f2Visa:3, f3Mc:5, f3Rfnd:10, f4Brand:5,
+  f5Cbp:2, f5Cb:5, bonHi:5, bonHiPts:6, bonMid:3, bonMidPts:3,
+  tierCrit:16, tierHigh:10
+}));
+function settingsPageHTML(A){
+  return `<div class="setwrap">
+    ${modelPanelHTML(A)}
+    <h2 id="s-design">Appearance<span class="n">affects looks only, never the numbers</span></h2>
+    ${designPanelHTML(true)}
+    ${exportPreviewHTML()}
+  </div>`;
+}
+
+function viewTabsHTML(){
+  const nRep = LIB.length;
+  return `<div class="views">
+    <button data-view="audit" class="${VIEW.page==="audit"?"on":""}">Audit</button>
+    <button data-view="trends" class="${VIEW.page==="trends"?"on":""}">Trends
+      <span class="c">${nRep} report${nRep===1?"":"s"}</span></button>
+    <button data-view="settings" class="${VIEW.page==="settings"?"on":""}">Settings</button>
+    <span class="sp"></span>
+    <span class="ctx">${VIEW.page==="audit"
+      ? (SNAP_A && SNAP_A.stamp ? "Showing "+esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp) : "")
+      : VIEW.page==="trends" ? "Across every report in the library"
+      : "Scoring, appearance and export layout"}</span>
+  </div>`;
+}
+function wireViews(){
+  document.querySelectorAll("[data-view]").forEach(b=>{
+    b.onclick=()=>{ VIEW.page=b.getAttribute("data-view"); window.scrollTo(0,0); render(); };
+  });
+  document.querySelectorAll("[data-lvl]").forEach(b=>{
+    b.onclick=()=>{ MT.level=b.getAttribute("data-lvl"); MT.sel=null; render(); };
+  });
+  document.querySelectorAll("table.mt tbody tr[data-row]").forEach(tr=>{
+    tr.onclick=()=>{
+      const k=tr.getAttribute("data-row");
+      MT.sel = (MT.sel && MT.sel.key===k && MT.sel.level===MT.level) ? null : {level:MT.level, key:k};
+      render();
+      const d=document.getElementById("detail");
+      if(d) d.scrollIntoView({behavior:"smooth", block:"nearest"});
+    };
+  });
+  const c=$("#mClose"); if(c) c.onclick=()=>{MT.sel=null; render();};
+  const cd=$("#btnCopyDetail"); if(cd) cd.onclick=()=>copyTSV("detail");
+  const mr=$("#btnModelReset");
+  if(mr) mr.onclick=()=>{
+    Object.keys(MODEL_DEFAULTS).forEach(k=>{
+      if(k==="w") Object.assign(MODEL.w, MODEL_DEFAULTS.w); else MODEL[k]=MODEL_DEFAULTS[k];
+    });
+    invalidateMH(); render(); toast("Scoring model reset to defaults.");
+  };
+}
+
+function wireMidTrend(){
+  wireViews();
+  wireBucketPicker();
+  const bkc=$("#bkClear");
+  if(bkc) bkc.onclick=e=>{e.stopPropagation(); VIEW.buckets=null; render();};
+  const sc=$("#mtScope"), so=$("#mtSort"), q=$("#mtQ");
+  if(sc) sc.onchange=()=>{MT.scope=sc.value; render();};
+  if(so) so.onchange=()=>{MT.sort=so.value; render();};
+  if(q) q.oninput=()=>{
+    MT.q=q.value; clearTimeout(q._h);
+    q._h=setTimeout(()=>{const p=q.selectionStart; render();
+      const a=$("#mtQ"); if(a){a.focus(); a.setSelectionRange(p,p);} },240);
+  };
+  const qc=$("#mtClear"); if(qc) qc.onclick=()=>{MT.q=""; render();};
+}
+
+/* ============================================================
+   PORTFOLIO TREND — one row per saved report, so a folder of
+   exports reads as a time series rather than a pile of files.
+   Separate small multiples, never a dual-axis chart.
+   ============================================================ */
+function portfolioSeries(){
+  return allSnapshotsChrono().map(s=>{
+    const A = analyse({name:s.name, stamp:s.stamp, rows:unpackRows(s.rows)});
+    return {snap:s, A};
+  });
+}
+function portfolioTrendHTML(){
+  if(LIB.length<1) return "";
+  const ser = portfolioSeries();
+  const last = ser[ser.length-1], prev = ser.length>1 ? ser[ser.length-2] : null;
+  const met = [
+    {lab:"Act today", get:x=>x.A.crit.length, dp:0},
+    {lab:"Flagged", get:x=>x.A.ranked.length+x.A.quar.length, dp:0},
+    {lab:"Total chargebacks", get:x=>x.A.E.reduce((a,e)=>a+e.cb,0), dp:0},
+    {lab:"Integrity flags", get:x=>x.A.integ.length, dp:0},
+    {lab:"Portfolio CB %", get:x=>{
+      const s=x.A.E.reduce((a,e)=>a+e.s,0), c=x.A.E.reduce((a,e)=>a+e.cb,0);
+      return s>0 ? c/s*100 : null;}, dp:3}
+  ];
+  const cards = met.map(m=>{
+    const vals = ser.map(m.get);
+    const cur = m.get(last), pv = prev ? m.get(prev) : null;
+    const shown = cur==null ? "n/a"
+      : (m.dp ? cur.toFixed(m.dp)+"%" : Number(cur).toLocaleString("en-US"));
+    return `<div class="spark"><div class="lab">${esc(m.lab)}</div>
+      <div class="now">${shown}</div>${deltaTag(cur,pv,false)}
+      ${sparkSVG(vals)}</div>`;
+  }).join("");
+  return `<h2 id="s-trend">Portfolio trend
+      <span class="n">${ser.length} report${ser.length===1?"":"s"}</span>
+      <button class="cp" data-copy="trend">Copy</button></h2>
+    <p class="lede">Every report in the library as a time series. ${ser.length<2
+      ? "Load more reports — or connect a folder of them — and these fill in."
+      : `Spanning ${esc(niceStamp(ser[0].snap.stamp)?niceStamp(ser[0].snap.stamp).full:ser[0].snap.name)}
+         to ${esc(niceStamp(last.snap.stamp)?niceStamp(last.snap.stamp).full:last.snap.name)}.`}
+      Portfolio CB % is total chargebacks over total sales, so it is dominated by the largest
+      merchants and moves far less than any single MID.</p>
+    <div class="trend">${cards}</div>
+    <div class="scroll"><table><thead><tr>
+      <th class="na">Report</th><th class="n na">MIDs</th><th class="n na">Act today</th>
+      <th class="n na">High</th><th class="n na">Monitor</th><th class="n na">Integrity</th>
+      <th class="n na">Flagged</th><th class="n na">CB total</th><th class="n na">Portfolio CB %</th>
+      </tr></thead><tbody>
+      ${ser.slice().reverse().map(x=>{
+        const n=niceStamp(x.snap.stamp);
+        const tot=x.A.E.reduce((a,e)=>a+e.s,0), cb=x.A.E.reduce((a,e)=>a+e.cb,0);
+        return `<tr><td>${n?esc(n.full):esc(x.snap.name)}</td>
+          <td class="n">${x.A.total}</td>
+          <td class="n"><strong>${x.A.crit.length}</strong></td>
+          <td class="n">${x.A.high.length}</td><td class="n">${x.A.mon.length}</td>
+          <td class="n">${x.A.integ.length}</td>
+          <td class="n">${x.A.ranked.length+x.A.quar.length}</td>
+          <td class="n">${cb.toLocaleString("en-US")}</td>
+          <td class="n">${tot>0?(cb/tot*100).toFixed(3)+"%":"n/a"}</td></tr>`;
+      }).join("")}
+    </tbody></table></div>
+    <p class="note">Reports are ordered by the timestamp in their filename where present, otherwise
+      by file modification time. Loading many reports recomputes each one, so a large folder takes a
+      moment on first scan.</p>`;
+}
+
+/* ---------- section nav + scroll affordances ---------- */
+function buildNav(A){
+  const items=[
+    ["s-act","Act today",A.crit.length],
+    ["s-high","High",A.high.length],
+    ["s-mon","Monitor",A.mon.length],
+    A.quar.length?["s-quar","Quarantine",A.quar.length]:null,
+    ["s-integ","Integrity",A.integ.length],
+    ["s-score","Scoreboard",null],
+    ["s-buckets","Buckets",A.buckets.length],
+    ["s-pat","Patterns",null]
+  ].filter(Boolean);
+  return `<nav class="nav" id="nav">${items.map(([id,label,n])=>
+    `<a href="#${id}" data-nav="${id}">${label}${n!=null?` <span class="c">${n}</span>`:""}</a>`
+  ).join("")}</nav>`;
+}
+function wireNav(){
+  const nav=document.getElementById("nav"); if(!nav) return;
+  nav.querySelectorAll("a[data-nav]").forEach(a=>{
+    a.onclick=e=>{
+      e.preventDefault();
+      const t=document.getElementById(a.getAttribute("data-nav"));
+      if(t) t.scrollIntoView({behavior:"smooth",block:"start"});
+    };
+  });
+  const ids=[...nav.querySelectorAll("a[data-nav]")].map(a=>a.getAttribute("data-nav"));
+  const obs=new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      if(en.isIntersecting){
+        nav.querySelectorAll("a").forEach(a=>a.classList.remove("on"));
+        const a=nav.querySelector(`a[data-nav="${en.target.id}"]`);
+        if(a) a.classList.add("on");
+      }
+    });
+  },{rootMargin:"-60px 0px -70% 0px"});
+  ids.forEach(id=>{const el=document.getElementById(id); if(el) obs.observe(el);});
+}
+window.addEventListener("scroll",()=>{
+  const b=document.getElementById("btnTop");
+  if(b) b.classList.toggle("on", window.scrollY>700);
+});
+document.addEventListener("keydown",e=>{
+  if(e.key==="/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){
+    const q=document.getElementById("q"); if(q){ e.preventDefault(); q.focus(); q.select(); }
+  }
+  if(e.key==="Escape"){ const q=document.getElementById("q");
+    if(q && document.activeElement===q){ q.blur(); } }
+});
+
+
+/* ---------- rendering ---------- */
+function cardHTML(e, cls){
+  const pills = e.F.map(f=>`<span class="pill">${f}</span>`).join("");
+  const cbpTxt = e.cbp===null ? "<b>no sales — data integrity flag</b>" : `<b>${e.cbp.toFixed(2)}%</b>`;
+  const covTxt = e.cov===null ? "n/a" : e.cov.toFixed(1)+"% cov";
+  const warn = e.bad ? `<div class="act"><span class="ar">⚠</span><b>CB % above 100% — verify the data before acting.</b>
+      Refunds and disputes exceed sales, which points to a reporting or settlement-window error rather than merchant behaviour.</div>` : "";
+  return `<div class="card ${cls||""}">
+    <div class="r1"><span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
+      <span class="mid">${esc(e.id)}</span></div>
+    <div class="r2"><span class="sc">Weighted ${e.w}</span> · ${pills} ·
+      Primary: ${esc(PRIMARY_LABEL[e.pri]||"—")} · ${esc(e.b)}</div>
+    <div class="figs">
+      CB <b>${e.cb}</b> / ${fmtN(e.s)} sales = ${cbpTxt} &nbsp;·&nbsp;
+      CB volume ${fmtM(e.cv)} &nbsp;·&nbsp; Refunds ${fmtP(e.rfp)} (${fmtM(e.dr)} on ${fmtM(e.ds)})<br>
+      Visa <b>${e.vi}</b>, RDR ${e.rn} (${covTxt}) &nbsp;·&nbsp; MC <b>${e.mc}</b>
+      &nbsp;·&nbsp; Amex <b>${e.ax}</b> &nbsp;·&nbsp; Disc <b>${e.dc}</b>
+    </div>
+    <div class="act"><span class="ar">→</span>${esc(actionFor(e))}</div>${warn}
+  </div>`;
+}
+
+const SORTABLE = [
+  {k:"m",   t:"Merchant"}, {k:"d", t:"DBA"}, {k:"b", t:"Bucket"},
+  {k:"w",   t:"Wgt", n:1}, {k:"cb", t:"CB #", n:1}, {k:"cbp", t:"CB %", n:1},
+  {k:"rfp", t:"Rfnd %", n:1}, {k:"vi", t:"Visa", n:1}, {k:"rn", t:"RDR", n:1}
+];
+function sortRows(rows){
+  const {key,dir}=VIEW.sort;
+  return rows.slice().sort((a,b)=>{
+    let x=a[key], y=b[key];
+    if(x===null||x===undefined)x=-Infinity; if(y===null||y===undefined)y=-Infinity;
+    if(typeof x==="string") return dir*x.localeCompare(y);
+    return dir*(x-y) || (b.cb-a.cb);
+  });
+}
+function thHTML(){
+  return SORTABLE.map(c=>{
+    const on = VIEW.sort.key===c.k;
+    const ar = on ? (VIEW.sort.dir<0?"▼":"▲") : "";
+    return `<th class="${c.n?"n":""}" data-sort="${c.k}">${c.t} <span class="ar">${ar}</span></th>`;
+  }).join("");
+}
+
+function finishRender(P, A, V){
+  $("#out").innerHTML = P.join("\n");
+  wireDesign();
+  applyTheme();
+  wireDynamic();
+  wireNav();
+  wireMidTrend();
+
+  /* footer */
+  const stampA = SNAP_A.stamp ? SNAP_A.stamp : "timestamp not in filename";
+  $("#foot").innerHTML = `
+    <strong>Source.</strong> ${esc(SNAP_A.name)} — ${esc(stampA)} — ${A.total} MIDs,
+    exported from portal.paymenthelp.ai/report/.
+    ${SNAP_B?`Compared against ${esc(SNAP_B.name)} (${esc(SNAP_B.stamp||"no timestamp")}).`:""}<br>
+    <strong>Method.</strong> CB % = CB # ÷ # Sales (count-based). Refund % = $ Refunds ÷ $ Sales.
+    RDR coverage = # RDR ÷ (# RDR + Visa CB). MC share = MC CB ÷ total CB.
+    Percentages to one decimal, CB % to two, counts whole.<br>
+    <strong>Verification.</strong> Every metric is recomputed from the raw export columns, then
+    cross-checked against the portal's own <code>% CB</code> and <code>% Rfnds</code> columns:
+    <strong>${V.checked} comparisons, ${V.mismatch.length} mismatches</strong>${V.mismatch.length?
+      " — "+esc(V.mismatch.slice(0,3).join("; ")):""}.
+    Tier counts reconcile to the MID total.<br>
+    <strong>Privacy.</strong> Files never leave this browser — there is no upload and no server call.
+    ${STORE.ok
+      ? "Loaded reports are kept in this browser's local storage on this device only, so your tabs "
+        + "are still here when you reopen the file. Use the × on a tab, or Remove all, to clear them."
+      : "This viewer blocks browser storage, so reports are held for this session only and nothing "
+        + "is written to disk."}<br>
+    <strong>Build.</strong> Console v${APP_VERSION}, scoring model ${MODEL_VERSION}.
+    Anyone comparing audits should be on the same build — the version is shown
+    beside the title at the top of this page.`;
+}
+
+function render(){
+  clearErr();
+  if(!SNAP_A){ $("#out").innerHTML='<div class="empty">Load today\'s report to generate the audit.</div>'; return; }
+  const A = analyse(SNAP_A);
+  const B = SNAP_B ? analyse(SNAP_B) : null;
+  const V = verify(A);
+  window.__A = A; window.__B = B;   // for export + tests
+
+  const fCrit = A.crit.filter(passFilter), fHigh = A.high.filter(passFilter),
+        fMon  = A.mon.filter(passFilter),  fInteg = A.integ.filter(passFilter),
+        fQuar = A.quar.filter(passFilter);
+  const filtering = !!VIEW.buckets || VIEW.q || VIEW.tier!=="__all";
+  const worst = A.ranked[0];
+  const P=[]; const add=s=>P.push(s);
+  add(viewTabsHTML());
+
+  if(VIEW.page==="trends"){
+    add(trendsPageHTML());
+    finishRender(P, A, V);
+    return;
+  }
+  if(VIEW.page==="settings"){
+    add(settingsPageHTML(A));
+    finishRender(P, A, V);
+    return;
+  }
+
+  /* headline + tiles */
+  const flagged = A.ranked.length + A.quar.length;
+  add(`<div class="headline">
+    <strong>${flagged} MIDs flagged</strong> of ${A.total} reviewed ·
+    <strong>${A.crit.length} act today</strong> ${worst ? `· worst is
+    <strong>${esc(worst.m)} — ${esc(worst.d)}</strong> at weighted ${worst.w},
+    ${worst.cbp!==null?worst.cbp.toFixed(2)+"% CB":"no sales"}` : ""}.
+    A further <strong>${A.integ.length} MIDs post chargebacks against zero sales</strong>
+    and sit outside the scoring model by design.
+  </div>`);
+  add(`<div class="tiles">
+    <div class="tile"><div class="lab">MIDs reviewed</div><div class="val">${A.total}</div>
+      <div class="sub">${A.active} with activity</div></div>
+    <div class="tile"><div class="lab">Flagged</div><div class="val">${flagged}</div>
+      <div class="sub">${A.withCB} had any chargeback</div></div>
+    <div class="tile c"><div class="lab">Act today</div><div class="val">${A.crit.length}</div>
+      <div class="sub">weighted ${MODEL.tierCrit}+</div></div>
+    <div class="tile"><div class="lab">High</div><div class="val">${A.high.length}</div>
+      <div class="sub">weighted ${MODEL.tierHigh}–${MODEL.tierCrit-1}</div></div>
+    <div class="tile"><div class="lab">Monitor</div><div class="val">${A.mon.length}</div>
+      <div class="sub">weighted 1–${MODEL.tierHigh-1}</div></div>
+    <div class="tile"><div class="lab">Integrity flags</div><div class="val">${A.integ.length}</div>
+      <div class="sub">${A.integ.reduce((a,e)=>a+e.cb,0)} CBs, ${fmtM(A.integ.reduce((a,e)=>a+e.cv,0),0)}</div></div>
+  </div>`);
+
+  if(VIEW.page==="audit") add(buildNav(A));
+
+  /* controls */
+  add(`<div class="ctrls">
+    <label>Buckets</label>
+    ${bucketPickerHTML()}
+    <label for="selTier">Tier</label>
+    <select id="selTier">
+      ${[["__all","All"],["CRITICAL","Act today"],["HIGH","High"],["MONITOR","Monitor"],
+         ["INTEGRITY","Integrity"],["QUARANTINE","Quarantine"]]
+        .map(([v,t])=>`<option value="${v}"${VIEW.tier===v?" selected":""}>${t}</option>`).join("")}
+    </select>
+    <input type="search" id="q" placeholder="Search merchant, DBA, MID…" value="${esc(VIEW.q)}">
+    <span class="sp"></span>
+    ${bucketChipHTML()}
+    ${filtering?`<button class="btn" id="btnClear">Clear filters</button>`:""}
+  </div>`);
+
+  /* A — act today */
+  add(`<h2 id="s-act"><span class="badge"><span class="dot d-c"></span>Act today</span>
+    <span class="n">weighted ${MODEL.tierCrit}+ · ${fCrit.length}${filtering?" of "+A.crit.length:""} MIDs</span>
+    <button class="cp" data-copy="crit">Copy</button></h2>`);
+  add(`<p class="lede">Every row here has realized chargeback damage past the ${MODEL.f5Cbp}% monitoring
+    ceiling. Ordered by weighted score, then chargeback count.</p>`);
+  add(fCrit.length ? fCrit.map(e=>cardHTML(e)).join("") : '<p class="note">No MIDs in this tier.</p>');
+
+  /* B — high */
+  add(`<h2 id="s-high"><span class="badge"><span class="dot d-h"></span>High</span>
+    <span class="n">weighted ${MODEL.tierHigh}–${MODEL.tierCrit-1} · ${fHigh.length}${filtering?" of "+A.high.length:""} MIDs</span>
+    <button class="cp" data-copy="high">Copy</button></h2>`);
+  add(`<div class="scroll"><table><thead><tr>${thHTML()}<th class="na">Flags</th><th class="na">Primary</th></tr></thead><tbody>
+    ${sortRows(fHigh).map(e=>`<tr>
+      <td>${esc(e.m)}<div class="mono">${esc(e.id)}</div></td>
+      <td>${esc(e.d)}</td><td>${esc(e.b)}</td>
+      <td class="n"><strong>${e.w}</strong></td><td class="n">${e.cb}</td>
+      <td class="n">${e.cbp===null?"n/a":e.cbp.toFixed(2)+"%"}</td>
+      <td class="n">${fmtP(e.rfp)}</td><td class="n">${e.vi}</td><td class="n">${e.rn}</td>
+      <td>${e.F.map(f=>`<span class="pill">${f}</span>`).join("")}</td>
+      <td>${esc(PRIMARY_LABEL[e.pri]||"")}</td></tr>`).join("")
+      || `<tr><td colspan="11" class="note">No MIDs in this tier.</td></tr>`}
+  </tbody></table></div>`);
+
+  /* C — monitor */
+  add(`<h2 id="s-mon"><span class="badge"><span class="dot d-m"></span>Monitor</span>
+    <span class="n">weighted 1–${MODEL.tierHigh-1} · ${fMon.length}${filtering?" of "+A.mon.length:""} MIDs</span>
+    <button class="cp" data-copy="mon">Copy</button></h2>`);
+  add(`<p class="lede">Single-flag rows with no realized CB-rate breach. Several carry large absolute
+    chargeback counts on large sales volume — the rate keeps them out of monitoring range, but the
+    uncovered Amex and Discover losses are real money.</p>`);
+  add(fMon.length ? `<ul class="flat">${sortRows(fMon).map(e=>`<li>
+      <span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
+      <span class="pill">${e.pri}</span>
+      <span class="tr">${esc(triggerFor(e))}</span></li>`).join("")}</ul>`
+    : '<p class="note">No MIDs in this tier.</p>');
+
+  /* quarantine */
+  if(fQuar.length){
+    add(`<h2 id="s-quar"><span class="badge"><span class="dot d-c"></span>Data quarantine</span>
+      <span class="n">CB % above 100% · ${fQuar.length}</span></h2>`);
+    add(`<p class="lede">Ranked on arithmetic alone but held out of the tiers above — the numbers are
+      almost certainly wrong, and acting on them would mean acting on a reporting error.</p>`);
+    add(fQuar.map(e=>cardHTML(e,"h")).join(""));
+  }
+
+  /* integrity */
+  const iCb=A.integ.reduce((a,e)=>a+e.cb,0), iCv=A.integ.reduce((a,e)=>a+e.cv,0),
+        iDr=A.integ.reduce((a,e)=>a+e.dr,0);
+  const iByB={}; A.integ.forEach(e=>iByB[e.b]=(iByB[e.b]||0)+1);
+  add(`<h2 id="s-integ"><span class="badge"><span class="dot d-i"></span>No sales — data integrity</span>
+    <span class="n">${fInteg.length}${filtering?" of "+A.integ.length:""} MIDs</span>
+    <button class="cp" data-copy="integ">Copy</button></h2>`);
+  add(`<p class="lede">These MIDs post <strong>${iCb} chargebacks and ${fmtM(iCv)}</strong> of dispute
+    volume against <strong>zero sales</strong>, plus ${fmtM(iDr)} in refunds with no sales behind them.
+    CB % is undefined, so F5 can never fire and they carry no score — they cannot surface in the tiers
+    above no matter how bad they get. This is a structural blind spot in the flag framework, not a quiet
+    quarter: treat it as its own worklist. Most look like closed or dead MIDs still absorbing disputes.</p>`);
+  add(`<div class="scroll"><table><thead><tr>
+      <th class="na">Merchant</th><th class="na">DBA</th><th class="na">MID</th><th class="na">Bucket</th>
+      <th class="n na">CB #</th><th class="n na">CB volume</th><th class="n na">Refunds</th>
+      <th class="n na">RDR</th><th class="n na">Vi/MC/Ax/Di</th></tr></thead><tbody>
+    ${fInteg.map(e=>`<tr><td>${esc(e.m)}</td><td>${esc(e.d)}</td>
+      <td class="mono">${esc(e.id)}</td><td>${esc(e.b)}</td>
+      <td class="n"><strong>${e.cb}</strong></td><td class="n">${fmtM(e.cv)}</td>
+      <td class="n">${fmtM(e.dr)}</td><td class="n">${e.rn}</td>
+      <td class="n">${e.vi}/${e.mc}/${e.ax}/${e.dc}</td></tr>`).join("")
+      || `<tr><td colspan="9" class="note">None.</td></tr>`}
+  </tbody></table></div>`);
+  add(`<p class="note">Concentration by bucket: ${Object.keys(iByB).sort((a,b)=>iByB[b]-iByB[a])
+      .map(k=>`<strong>${esc(k)}</strong> ${iByB[k]}`).join(" · ")||"—"}</p>`);
+
+  /* scoreboard */
+  add(`<h2 id="s-score">Scoreboard <button class="cp" data-copy="score">Copy</button></h2>`);
+  add(`<div class="scroll"><table><thead><tr><th class="na">Flag</th><th class="na">Condition</th>
+      <th class="n na">MIDs</th></tr></thead><tbody>
+    ${["F1","F2","F3","F4","F5"].map(f=>`<tr><td><span class="pill">${f}</span></td>
+      <td>${esc(FLAGDEF[f][0])}</td><td class="n"><strong>${A.flagCounts[f]}</strong></td></tr>`).join("")}
+  </tbody></table></div>`);
+  const unfl = A.total - A.inert - A.ranked.length - A.quar.length - A.integ.length;
+  add(`<h3>Tier counts</h3><div class="scroll"><table><thead><tr><th class="na">Tier</th>
+      <th class="n na">MIDs</th></tr></thead><tbody>
+    <tr><td><span class="badge"><span class="dot d-c"></span>Act today</span></td><td class="n"><strong>${A.crit.length}</strong></td></tr>
+    <tr><td><span class="badge"><span class="dot d-h"></span>High</span></td><td class="n"><strong>${A.high.length}</strong></td></tr>
+    <tr><td><span class="badge"><span class="dot d-m"></span>Monitor</span></td><td class="n"><strong>${A.mon.length}</strong></td></tr>
+    <tr><td>Ranked subtotal</td><td class="n">${A.ranked.length}</td></tr>
+    <tr><td>Data quarantine (CB % &gt; 100%)</td><td class="n">${A.quar.length}</td></tr>
+    <tr><td>No sales — data integrity</td><td class="n">${A.integ.length}</td></tr>
+    <tr><td>Active but unflagged</td><td class="n">${unfl}</td></tr>
+    <tr><td>Inert (no sales, no chargebacks)</td><td class="n">${A.inert}</td></tr>
+    <tr><td><strong>Total MIDs reviewed</strong></td><td class="n"><strong>${A.total}</strong></td></tr>
+  </tbody></table></div>`);
+  add(`<p class="note">Unweighted flag-count tiers, for continuity with older runs:
+    ${[1,2,3,4,5].map(k=>`${k}+ ${A.nfTiers[k]}`).join(" · ")}.</p>`);
+
+  /* buckets */
+  add(renderBuckets(A));
+
+  /* patterns */
+  add(renderPatterns(A));
+
+
+  finishRender(P, A, V);
+}
+
+function renderBuckets(A){
+  const shown = A.buckets.filter(b=>b.cb>=10).slice(0,14);
+  const max = shown.length ? shown[0].cb : 1;
+  return `<h2 id="s-buckets">Where the chargebacks sit<span class="n">by bucket · CB count</span>
+    <button class="cp" data-copy="buckets">Copy</button></h2>
+  <p class="lede">Buckets with 10 or more chargebacks. Bars in red have <strong>RDR = 0 across every MID
+    in the bucket</strong> while Visa disputes are posting — a configuration state, not merchant behaviour.</p>
+  <div class="chart">
+    <div class="lgnd"><span><i style="background:var(--bar)"></i>RDR configured</span>
+      <span><i style="background:var(--crit)"></i>◆ RDR = 0 bucket-wide</span></div>
+    ${shown.map(b=>{
+      const z = b.rn===0 && b.vi>0;
+      return `<div class="brow" title="${esc(b.name)} — ${b.cb} CBs, ${b.n} MIDs, ${b.fl} flagged, RDR ${b.rn}">
+        <div class="bl">${esc(b.name)}${z?' <span class="zm">◆</span>':""}</div>
+        <div class="btrack"><div class="bfill${z?" z":""}" style="width:${Math.max(b.cb/max*100,1.2).toFixed(1)}%"></div></div>
+        <div class="bv">${b.cb}</div></div>`;
+    }).join("")}
+    <p class="note">Hover a bar for MID count, flagged count and RDR total.</p>
+  </div>
+  <h3>Bucket detail</h3>
+  <div class="scroll"><table><thead><tr><th class="na">Bucket</th><th class="n na">MIDs</th>
+    <th class="n na">Flagged</th><th class="n na">Zero-sale</th><th class="n na">CB #</th>
+    <th class="n na">RDR #</th><th class="n na">Visa</th><th class="n na">MC</th>
+    <th class="n na">Amex</th><th class="n na">Disc</th></tr></thead><tbody>
+    ${A.buckets.map(b=>{
+      const z = b.rn===0 && b.vi>0;
+      return `<tr><td>${esc(b.name)}${z?' <span class="zm">◆</span>':""}</td>
+        <td class="n">${b.n}</td><td class="n">${b.fl}</td><td class="n">${b.zs}</td>
+        <td class="n"><strong>${b.cb}</strong></td><td class="n">${b.rn}</td>
+        <td class="n">${b.vi}</td><td class="n">${b.mc}</td><td class="n">${b.ax}</td>
+        <td class="n">${b.dc}</td></tr>`;
+    }).join("")}
+  </tbody></table></div>
+  <p class="note">Buckets with no chargeback activity are omitted. ◆ marks RDR = 0 across the whole bucket.</p>`;
+}
+
+function renderPatterns(A){
+  const out=['<h2 id="s-pat">Pattern callouts</h2>'];
+  const zeroB = A.buckets.filter(b=>b.rn===0 && b.vi>0).sort((a,b)=>b.vi-a.vi);
+  if(zeroB.length){
+    const top=zeroB[0];
+    const critIn = A.crit.filter(e=>e.b===top.name).length;
+    out.push(`<div class="callout"><div class="ttl">1 · Entire bucket with RDR = 0 — ${esc(top.name)}</div>
+      <p>All <strong>${top.n} MIDs</strong> in this bucket have RDR # = 0, yet it carries
+      <strong>${top.vi} Visa chargebacks</strong> and ${top.cb} total. <strong>${top.fl} of ${top.n}</strong>
+      MIDs are flagged${critIn?`, including ${critIn} of the ${A.crit.length} rows in the act-today tier`:""}.
+      One configuration problem, not ${top.fl} merchant problems — enabling RDR at the bucket level is the
+      highest-leverage action available.
+      ${zeroB.length>1?`Other buckets with RDR = 0 alongside Visa activity, at lower volume: `
+        + zeroB.slice(1).map(b=>`${esc(b.name)} (${b.vi} Visa CB)`).join(", ")+"." : ""}</p></div>`);
+  } else {
+    out.push(`<div class="callout na"><div class="ttl">1 · Entire bucket with RDR = 0 — none found</div>
+      <p>No bucket has RDR switched off across all its MIDs while Visa disputes are posting.</p></div>`);
+  }
+  const m3 = A.multi.filter(x=>x.rows.length>=3);
+  if(m3.length){
+    out.push(`<div class="callout"><div class="ttl">2 · Merchants with 3+ flagged MIDs</div>
+      <p>${m3.map(x=>`<strong>${esc(x.m)}</strong> — ${x.rows.length} flagged MIDs (`
+        + x.rows.slice().sort((a,b)=>b.w-a.w).map(e=>`${esc(e.d)} w${e.w}`).join(", ")+")").join("<br>")}
+      <br>Handle these at the merchant level rather than chasing individual MIDs.
+      ${A.multi.filter(x=>x.rows.length===2).length?`Merchants with exactly 2 flagged MIDs, worth watching
+      for the same pattern: `+A.multi.filter(x=>x.rows.length===2).map(x=>esc(x.m)).join(", ")+".":""}</p></div>`);
+  } else {
+    out.push(`<div class="callout na"><div class="ttl">2 · Merchants with 3+ flagged MIDs — none</div>
+      <p>No single merchant has three or more flagged MIDs in this export.</p></div>`);
+  }
+  const iCb=A.integ.reduce((a,e)=>a+e.cb,0), iCv=A.integ.reduce((a,e)=>a+e.cv,0);
+  const iByB={}; A.integ.forEach(e=>iByB[e.b]=(iByB[e.b]||0)+1);
+  const topB=Object.keys(iByB).sort((a,b)=>iByB[b]-iByB[a]).slice(0,2);
+  out.push(`<div class="callout"><div class="ttl">3 · Chargebacks posting against zero sales — ${A.integ.length} MIDs</div>
+    <p><strong>${iCb} chargebacks</strong> and <strong>${fmtM(iCv)}</strong> of dispute volume on MIDs with
+    no sales${topB.length?`, concentrated in ${topB.map(k=>`<strong>${esc(k)}</strong> (${iByB[k]})`).join(" and ")}`:""}.
+    Because CB % is undefined these score zero and never reach the action tiers — the framework
+    structurally cannot rank them. ${A.integ.length?`Largest: ${A.integ.slice(0,3)
+      .map(e=>`${esc(e.d)} (${e.cb} CBs, ${fmtM(e.cv)})`).join(", ")}.`:""}</p></div>`);
+  if(A.quar.length){
+    out.push(`<div class="callout cr"><div class="ttl">4 · CB % above 100% — ${A.quar.length} MID${A.quar.length>1?"s":""}</div>
+      <p>${A.quar.map(e=>`<strong>${esc(e.m)}</strong> (${esc(e.id)}) at
+        <strong>${e.cbp.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}%</strong>
+        — ${e.cb} chargebacks against ${fmtN(e.s)} sale${e.s===1?"":"s"}, with ${fmtM(e.dr)} of refunds on
+        ${fmtM(e.ds)} of sales`).join("<br>")}. Verify before acting — held in quarantine rather than
+        ranked among real damage.</p></div>`);
+  } else {
+    out.push(`<div class="callout na"><div class="ttl">4 · CB % above 100% — none</div>
+      <p>No MID reports more chargebacks than it could support from its sales count.</p></div>`);
+  }
+  out.push(`<div class="callout na"><div class="ttl">5 · MIDs first appearing in the last 3 days</div>
+    <p>Needs a running history rather than a pairwise comparison. With two exports loaded, the
+    <em>New to the list</em> block above is the closest equivalent.</p></div>`);
+  return out.join("");
+}
+
+
+
+/* ============================================================
+   EXPORT — column order, formatting and group separators are
+   defined once here and drive the clipboard, the CSV download and
+   the on-screen preview, so all three always agree.
+
+   sep:true marks a column after which a thick rule is drawn.
+   money / pct columns carry their $ and % in the value itself, so
+   Google Sheets receives them already formatted.
+   ============================================================ */
+const EXPORT_COLS = [
+  {h:"Tier",            k:"tier"},
+  {h:"Flags",           k:"flags"},
+  {h:"Primary",         k:"primary"},
+  {h:"Action",          k:"action",  sep:true},
+  {h:"Bucket",          k:"b"},
+  {h:"Merchant",        k:"m"},
+  {h:"DBA",             k:"d"},
+  {h:"MID",             k:"id",      mono:true},
+  {h:"# Sales",         k:"s",       int:true},
+  {h:"$ Sales",         k:"ds",      money:true, sep:true},
+  {h:"CB #",            k:"cb",      int:true},
+  {h:"CB Volume",       k:"cv",      money:true},
+  {h:"CB %",            k:"cbp",     pct:2, sep:true},
+  {h:"$ Refunds",       k:"dr",      money:true},
+  {h:"Refund %",        k:"rfp",     pct:1},
+  {h:"MC",              k:"mc",      int:true, sep:true},
+  {h:"Visa",            k:"vi",      int:true},
+  {h:"# RDR",           k:"rn",      int:true},
+  {h:"RDR Coverage %",  k:"cov",     pct:1, sep:true},
+  {h:"Amex",            k:"ax",      int:true},
+  {h:"Disc",            k:"dc",      int:true}
+];
+
+const money2 = v => v==null ? "" :
+  "$" + Number(v).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+const pctN = (v,d) => v==null ? "" :
+  Number(v).toLocaleString("en-US",{minimumFractionDigits:d, maximumFractionDigits:d}) + "%";
+const intN = v => v==null ? "" : Number(v).toLocaleString("en-US");
+
+/* one formatted cell, used by every export path */
+function cellFor(e, col){
+  const v = e[col.k];
+  if(col.money) return money2(v);
+  if(col.pct){
+    if(col.k==="cbp" && e.zs) return "no sales";
+    return v==null ? "" : pctN(v, col.pct);
+  }
+  if(col.int) return intN(v);
+  return v==null ? "" : String(v);
+}
+function decorate(e){
+  return Object.assign({}, e, {
+    tier: tierOf(e),
+    flags: e.F.join("+") || "—",
+    primary: PRIMARY_LABEL[e.pri] || "",
+    action: actionFor(e)
+  });
+}
+function exportRow(e){
+  const d = decorate(e);
+  return EXPORT_COLS.map(c => cellFor(d, c).replace(/[\t\r\n]/g," "));
+}
+
+function exportSet(which){
+  const A=window.__A;
+  if(!A) return {head:[],rows:[],label:"",cols:EXPORT_COLS};
+  const pick = {
+    crit:["Act today", A.crit], high:["High", A.high], mon:["Monitor", A.mon],
+    integ:["Data integrity", A.integ], quar:["Quarantine", A.quar],
+    all:["Full audit", A.ranked.concat(A.quar).concat(A.integ)]
+  }[which];
+
+  if(which==="buckets"){
+    return {label:"Buckets", cols:null,
+      head:["Bucket","MIDs","Flagged","Zero-sale","# Sales","$ Sales","$ Refunds","CB #",
+            "# RDR","Visa","MC","Amex","Disc","RDR=0 bucket-wide"],
+      rows:A.buckets.map(b=>[b.name,intN(b.n),intN(b.fl),intN(b.zs),intN(b.s),
+        money2(b.ds),money2(b.dr),intN(b.cb),intN(b.rn),intN(b.vi),intN(b.mc),
+        intN(b.ax),intN(b.dc),(b.rn===0&&b.vi>0)?"YES":""]), sepAfter:[]};
+  }
+  if(which==="score"){
+    const unfl = A.total - A.inert - A.ranked.length - A.quar.length - A.integ.length;
+    return {label:"Scoreboard", cols:null, head:["Metric","Value"], sepAfter:[],
+      rows:[["F1",A.flagCounts.F1],["F2",A.flagCounts.F2],["F3",A.flagCounts.F3],
+            ["F4",A.flagCounts.F4],["F5",A.flagCounts.F5],
+            ["Act today",A.crit.length],["High",A.high.length],["Monitor",A.mon.length],
+            ["Ranked subtotal",A.ranked.length],["Quarantine",A.quar.length],
+            ["Data integrity",A.integ.length],["Active but unflagged",unfl],
+            ["Inert",A.inert],["Total MIDs reviewed",A.total]]
+        .map(r=>[r[0], intN(r[1])])};
+  }
+  if(which==="midtrend"){
+    const {all} = mtRows();
+    return {label:"MID trends", cols:null, sepAfter:[],
+      head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
+            "Merchant","DBA","Bucket","Reports","Status",
+            "First report","Last report",
+            "Volume first","Volume last","Δ Volume",
+            "CB # first","CB # last","Δ CB #",
+            "CB % first","CB % last","Δ CB % (pp)",
+            "Weighted last","Tier last"],
+      rows:all.map(r=>{
+        const H=historyAt(MT.level);
+        const fi=r.pts.findIndex(Boolean);
+        let li=-1; r.pts.forEach((p,i)=>{ if(p) li=i; });
+        const nf=niceStamp(H.stamps[fi]), nl=niceStamp(H.stamps[li]);
+        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b, String(r.n), r.status[0],
+          nf?nf.full:String(H.stamps[fi]), nl?nl.full:String(H.stamps[li]),
+          intN(r.first.s), intN(r.last.s), (r.dsal>0?"+":"")+intN(r.dsal),
+          intN(r.first.cb), intN(r.last.cb), (r.dcb>0?"+":"")+intN(r.dcb),
+          r.first.cbp==null?"no sales":pctN(r.first.cbp,2),
+          r.last.cbp==null?"no sales":pctN(r.last.cbp,2),
+          r.dcbp==null?"":(r.dcbp>0?"+":"")+r.dcbp.toFixed(2),
+          String(r.last.w), r.last.tier];
+      })};
+  }
+  if(which==="midmatrix"){
+    const H=historyAt(MT.level); const {all}=mtRows();
+    const dates = H.stamps.map(s=>{const n=niceStamp(s); return n?n.full:String(s);});
+    return {label:"CB % matrix", cols:null, sepAfter:[],
+      head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
+            "Merchant","DBA","Bucket","Status"].concat(dates),
+      rows:all.map(r=>[r.level==="mid"?r.id:r.key,r.m,r.d,r.b,r.status[0]].concat(
+        r.pts.map(p=> !p ? "" : (p.cbp==null?"no sales":pctN(p.cbp,2)))))};
+  }
+  if(which==="trend"){
+    const ser=portfolioSeries();
+    return {label:"Portfolio trend", cols:null, sepAfter:[],
+      head:["Report","MIDs","Act today","High","Monitor","Integrity","Flagged",
+            "Ranked","Quarantine","CB total","Portfolio CB %","F1","F2","F3","F4","F5"],
+      rows:ser.slice().reverse().map(x=>{
+        const n=niceStamp(x.snap.stamp);
+        const tot=x.A.E.reduce((a,e)=>a+e.s,0), cb=x.A.E.reduce((a,e)=>a+e.cb,0);
+        return [n?n.full:x.snap.name, intN(x.A.total), intN(x.A.crit.length),
+          intN(x.A.high.length), intN(x.A.mon.length), intN(x.A.integ.length),
+          intN(x.A.ranked.length+x.A.quar.length), intN(x.A.ranked.length),
+          intN(x.A.quar.length), intN(cb), tot>0?pctN(cb/tot*100,3):"",
+          intN(x.A.flagCounts.F1), intN(x.A.flagCounts.F2), intN(x.A.flagCounts.F3),
+          intN(x.A.flagCounts.F4), intN(x.A.flagCounts.F5)];
+      })};
+  }
+  if(which==="detail"){
+    if(!MT.sel) return {label:"Selected history", cols:null, head:["Note"],
+                        rows:[["Nothing selected — click a row in Trends"]], sepAfter:[]};
+    const H=historyAt(MT.sel.level);
+    const rec=H.rows.find(r=>r.key===MT.sel.key);
+    if(!rec) return {label:"Selected history", cols:null, head:["Note"],
+                     rows:[["That row is not in the current library"]], sepAfter:[]};
+    const isMid = rec.level==="mid";
+    return {label:"Selected history", cols:null, sepAfter:[],
+      head:["Report", isMid?"MID":"Group", "Merchant","DBA","Bucket"]
+        .concat(isMid?["Weighted","Tier"]:["MIDs","Flagged","Over ceiling"])
+        .concat(["# Sales","$ Sales","CB #","CB Volume","CB %","Refund %"]),
+      rows:rec.pts.map((p,i)=>({p,i})).filter(x=>x.p).reverse().map(({p,i})=>{
+        const n=niceStamp(H.stamps[i]);
+        return [n?n.full:String(H.stamps[i]), isMid?rec.id:rec.key, rec.m, rec.d, rec.b]
+          .concat(isMid?[String(p.w),p.tier]:[intN(p.nmids),intN(p.flagged),intN(p.over)])
+          .concat([intN(p.s), money2(p.ds), intN(p.cb), money2(p.cv),
+                   p.cbp==null?"no sales":pctN(p.cbp,2),
+                   p.rfp==null?"":pctN(p.rfp,1)]);
+      })};
+  }
+  if(which==="midtrend"){
+    const {all} = mtRows();
+    return {label:"MID trends", cols:null, sepAfter:[],
+      head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
+            "Merchant","DBA","Bucket","Reports","Status",
+            "First report","Last report",
+            "Volume first","Volume last","Δ Volume",
+            "CB # first","CB # last","Δ CB #",
+            "CB % first","CB % last","Δ CB % (pp)",
+            "Weighted last","Tier last"],
+      rows:all.map(r=>{
+        const H=historyAt(MT.level);
+        const fi=r.pts.findIndex(Boolean);
+        let li=-1; r.pts.forEach((p,i)=>{ if(p) li=i; });
+        const nf=niceStamp(H.stamps[fi]), nl=niceStamp(H.stamps[li]);
+        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b, String(r.n), r.status[0],
+          nf?nf.full:String(H.stamps[fi]), nl?nl.full:String(H.stamps[li]),
+          intN(r.first.s), intN(r.last.s), (r.dsal>0?"+":"")+intN(r.dsal),
+          intN(r.first.cb), intN(r.last.cb), (r.dcb>0?"+":"")+intN(r.dcb),
+          r.first.cbp==null?"no sales":pctN(r.first.cbp,2),
+          r.last.cbp==null?"no sales":pctN(r.last.cbp,2),
+          r.dcbp==null?"":(r.dcbp>0?"+":"")+r.dcbp.toFixed(2),
+          String(r.last.w), r.last.tier];
+      })};
+  }
+  if(which==="midmatrix"){
+    const H=historyAt(MT.level); const {all}=mtRows();
+    const dates = H.stamps.map(s=>{const n=niceStamp(s); return n?n.full:String(s);});
+    return {label:"CB % matrix", cols:null, sepAfter:[],
+      head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
+            "Merchant","DBA","Bucket","Status"].concat(dates),
+      rows:all.map(r=>[r.level==="mid"?r.id:r.key,r.m,r.d,r.b,r.status[0]].concat(
+        r.pts.map(p=> !p ? "" : (p.cbp==null?"no sales":pctN(p.cbp,2)))))};
+  }
+  if(which==="trend"){
+    const ser=portfolioSeries();
+    return {label:"Portfolio trend", cols:null, sepAfter:[],
+      head:["Report","MIDs","Act today","High","Monitor","Integrity","Flagged",
+            "Ranked","Quarantine","CB total","Portfolio CB %","F1","F2","F3","F4","F5"],
+      rows:ser.slice().reverse().map(x=>{
+        const n=niceStamp(x.snap.stamp);
+        const tot=x.A.E.reduce((a,e)=>a+e.s,0), cb=x.A.E.reduce((a,e)=>a+e.cb,0);
+        return [n?n.full:x.snap.name, intN(x.A.total), intN(x.A.crit.length),
+          intN(x.A.high.length), intN(x.A.mon.length), intN(x.A.integ.length),
+          intN(x.A.ranked.length+x.A.quar.length), intN(x.A.ranked.length),
+          intN(x.A.quar.length), intN(cb), tot>0?pctN(cb/tot*100,3):"",
+          intN(x.A.flagCounts.F1), intN(x.A.flagCounts.F2), intN(x.A.flagCounts.F3),
+          intN(x.A.flagCounts.F4), intN(x.A.flagCounts.F5)];
+      })};
+  }
+  const list = (pick ? pick[1] : A.ranked).filter(passFilter);
+  const sepAfter = EXPORT_COLS.map((c,i)=>c.sep?i:-1).filter(i=>i>=0);
+  return {label: pick?pick[0]:"Full audit", cols:EXPORT_COLS,
+          head:EXPORT_COLS.map(c=>c.h), rows:list.map(exportRow), sepAfter};
+}
+
+
+/* Audit filenames are YEAR-MONTH-DAY-AUDIT, dated from the report's own
+   timestamp rather than today's date — the name tells you when the data is
+   from, not when you happened to click save. Year-first means a plain
+   alphabetical folder listing is already in chronological order. */
+function auditBaseName(){
+  const st = SNAP_A && SNAP_A.stamp ? SNAP_A.stamp : null;
+  if(st && /^\d{4}-\d{2}-\d{2}/.test(st)) return st.slice(0,10) + "-AUDIT";
+  /* no timestamp in the source filename — fall back to today */
+  const n=new Date(), p=v=>String(v).padStart(2,"0");
+  return `${n.getFullYear()}-${p(n.getMonth()+1)}-${p(n.getDate())}-AUDIT`;
+}
+function auditFileName(){ return auditBaseName()+".csv"; }
+
+/* ---- serialisers ---- */
+function toTSV(set){
+  return [set.head.join("\t")].concat(set.rows.map(r=>r.join("\t"))).join("\n");
+}
+function toCSV(set){
+  const q=v=>/[",\n]/.test(String(v))?'"'+String(v).replace(/"/g,'""')+'"':String(v);
+  return [set.head.map(q).join(",")].concat(set.rows.map(r=>r.map(q).join(","))).join("\n");
+}
+/* Google Sheets honours pasted HTML, so the thick group rules and
+   bold header survive the paste. Plain TSV rides along as fallback. */
+function toHTML(set){
+  const sep = new Set(set.sepAfter||[]);
+  const THICK = "border-right:2px solid #000";
+  const th = set.head.map((h,i)=>
+    `<th style="background:#f0efec;border:1px solid #c3c2b7;${sep.has(i)?THICK:""};
+      padding:4px 6px;font-weight:700;text-align:left">${esc(h)}</th>`).join("");
+  const body = set.rows.map(r=>"<tr>"+r.map((v,i)=>{
+    const numeric = set.cols ? !!(set.cols[i].int||set.cols[i].money||set.cols[i].pct) : false;
+    return `<td style="border:1px solid #e1e0d9;${sep.has(i)?THICK:""};padding:3px 6px;
+      text-align:${numeric?"right":"left"}">${esc(v)}</td>`;
+  }).join("")+"</tr>").join("");
+  return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">
+    <thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function copyTSV(which){
+  const set=exportSet(which);
+  const tsv=toTSV(set), html=toHTML(set);
+  const done = () => toast(`${set.label} copied — ${set.rows.length} row${
+    set.rows.length===1?"":"s"}. Paste into Google Sheets.`);
+  try{
+    if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      await navigator.clipboard.write([ new ClipboardItem({
+        "text/html": new Blob([html], {type:"text/html"}),
+        "text/plain": new Blob([tsv], {type:"text/plain"})
+      })]);
+      done(); return;
+    }
+    await navigator.clipboard.writeText(tsv); done(); return;
+  }catch(err){ /* fall through */ }
+  try{
+    const d=document.createElement("div");
+    d.setAttribute("contenteditable","true");
+    d.style.position="fixed"; d.style.opacity="0"; d.innerHTML=html;
+    document.body.appendChild(d);
+    const rg=document.createRange(); rg.selectNodeContents(d);
+    const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+    document.execCommand("copy");
+    sel.removeAllRanges(); d.remove(); done();
+  }catch(e2){
+    showErr("Could not reach the clipboard from this context. Use Download CSV instead.");
+  }
+}
+function downloadCSV(){
+  const set=exportSet("all");
+  const blob=new Blob(["﻿"+toCSV(set)],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  const name=auditFileName();
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+  toast(`Downloaded ${name} — ${set.rows.length} rows.`);
+}
+
+/* on-screen preview so the layout is visible before pasting */
+function exportPreviewHTML(){
+  const set=exportSet("all");
+  const sep=new Set(set.sepAfter||[]);
+  const rows=set.rows.slice(0,6);
+  return `<h2 id="s-exp">Export layout
+      <span class="n">${set.rows.length} rows · ${set.head.length} columns</span>
+      <button class="cp" data-copy="all">Copy</button></h2>
+    <p class="lede">Exactly what lands in Google Sheets or the CSV, in order. Dollar and percentage
+      columns carry their symbols so Sheets reads them as currency and percentages rather than text.
+      The thick rules mark the five column groups and survive a paste into Sheets.</p>
+    <div class="scroll expwrap"><table class="exp"><thead><tr>
+      ${set.head.map((h,i)=>`<th class="${sep.has(i)?"gsep":""} na">${esc(h)}</th>`).join("")}
+    </tr></thead><tbody>
+      ${rows.map(r=>"<tr>"+r.map((v,i)=>{
+        const c=set.cols?set.cols[i]:null;
+        const numeric=c&&(c.int||c.money||c.pct);
+        return `<td class="${sep.has(i)?"gsep ":""}${numeric?"n":""}">${esc(v)}</td>`;
+      }).join("")+"</tr>").join("")}
+    </tbody></table></div>
+    <p class="note">Showing the first ${rows.length} of ${set.rows.length} rows.
+      Section Copy buttons export just that tier, using the same column order.
+      Every export respects the bucket, tier and search filters currently applied.</p>`;
+}
+
+/* ---------- wiring ---------- */
+function wireDynamic(){
+  const st=$("#selTier"), q=$("#q"), bc=$("#btnClear");
+  wireBucketPicker();
+  const bkc=$("#bkClear");
+  if(bkc) bkc.onclick=e=>{e.stopPropagation(); VIEW.buckets=null; render();};
+  if(st) st.onchange=e=>{VIEW.tier=e.target.value; render();};
+  if(q){
+    q.oninput=e=>{
+      VIEW.q=e.target.value;
+      clearTimeout(q._h); q._h=setTimeout(()=>{const p=q.selectionStart; render();
+        const nq=$("#q"); if(nq){nq.focus(); nq.setSelectionRange(p,p);} }, 260);
+    };
+  }
+  if(bc) bc.onclick=()=>{
+    VIEW.buckets=null; VIEW.tier="__all"; VIEW.q=""; VIEW.bkQ=""; render();
+  };
+  document.querySelectorAll("th[data-sort]").forEach(th=>{
+    th.onclick=()=>{
+      const k=th.getAttribute("data-sort");
+      VIEW.sort = (VIEW.sort.key===k) ? {key:k,dir:-VIEW.sort.dir} : {key:k,dir:-1};
+      render();
+    };
+  });
+  document.querySelectorAll("[data-copy]").forEach(b=>{
+    b.onclick=()=>copyTSV(b.getAttribute("data-copy"));
+  });
+  document.querySelectorAll("input[data-m]").forEach(inp=>{
+    inp.onchange=()=>{
+      const path=inp.getAttribute("data-m"); const v=parseFloat(inp.value);
+      if(isNaN(v)) return;
+      if(path.indexOf("w.")===0) MODEL.w[path.slice(2)]=v; else MODEL[path]=v;
+      if(typeof invalidateMH==="function") invalidateMH();
+      render();
+      const again=document.querySelector(`input[data-m="${path}"]`);
+      if(again){
+        const d=again.closest("details"); if(d) d.open=true;
+        again.focus(); again.select();
+      }
+    };
+  });
+}
+
+function ingestFiles(files){
+  const list=[...files].filter(f=>/\.csv$/i.test(f.name)||f.type==="text/csv");
+  if(!list.length){ showErr("Those files are not CSV exports."); return; }
+  let done=0, added=0, replaced=0, failed=[], newIds=[];
+  list.forEach(file=>{
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const snap=loadSnapshot(String(rd.result), file.name);
+        const r=addSnapshot(snap);
+        newIds.push(r.id);
+        if(r.replaced) replaced++; else added++;
+      }catch(err){
+        failed.push(file.name+": "+(err.isAudit
+          ? "that is an audit this tool produced, not a portal export"
+          : (err.message||err)));
+      }
+      if(++done===list.length) finish();
+    };
+    rd.onerror=()=>{ failed.push(file.name+": could not be read");
+      if(++done===list.length) finish(); };
+    rd.readAsText(file);
+  });
+  function finish(){
+    focusNewest(newIds);
+    renderDataStrip(); syncActive();
+    render();
+    if(failed.length) showErr("Skipped "+failed.length+": "+failed.join(" · "));
+    else clearErr();
+    if(folderMode() && added) toast(added+" loose file"+(added===1?"":"s")
+      +" added for this session — save them into "+FOLDER.name+" to keep them.");
+    const bits=[];
+    if(added) bits.push(added+" report"+(added===1?"":"s")+" added");
+    if(replaced) bits.push(replaced+" refreshed");
+    if(bits.length) toast(bits.join(", ")+".");
+  }
+}
+
+/* folder-picker fallback: reads every CSV in a chosen folder once */
+(function(){
+  const inp=$("#fileDir");
+  if(inp) inp.onchange=e=>{
+    const files=[...e.target.files].filter(f=>/\.csv$/i.test(f.name));
+    if(!files.length){ showErr("That folder contains no CSV files."); e.target.value=""; return; }
+    LIB=[]; ingestFiles(files); e.target.value="";
+  };
+})();
+
+/* the hidden file input is opened by buttons in the data strip */
+(function(){
+  const input=$("#fileA");
+  if(input) input.onchange=e=>{ ingestFiles(e.target.files); e.target.value=""; };
+})();
+
+/* whole-page drop target with overlay */
+(function(){
+  const dz=$("#dz"); let depth=0;
+  const hasFiles=e=>e.dataTransfer && [...(e.dataTransfer.types||[])].includes("Files");
+  window.addEventListener("dragenter",e=>{
+    if(!hasFiles(e)) return; e.preventDefault(); depth++; dz.classList.add("on"); });
+  window.addEventListener("dragover",e=>{ if(hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("dragleave",e=>{
+    if(!hasFiles(e)) return; depth=Math.max(0,depth-1); if(!depth) dz.classList.remove("on"); });
+  window.addEventListener("drop",e=>{
+    if(!hasFiles(e)) return;
+    e.preventDefault(); depth=0; dz.classList.remove("on");
+    ingestFiles(e.dataTransfer.files);
+  });
+})();
+
+/* paste a CSV straight in */
+window.addEventListener("paste",e=>{
+  const f=[...(e.clipboardData?e.clipboardData.files:[])];
+  if(f.length){ e.preventDefault(); ingestFiles(f); }
+});
+
+$("#btnSheets").onclick=()=>copyTSV("all");
+$("#btnCsv").onclick=downloadCSV;
+$("#btnPrint").onclick=()=>window.print();
+$("#btnTheme").onclick=()=>{
+  const r=document.documentElement;
+  let cur=r.getAttribute("data-theme");
+  if(!cur) cur = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark":"light";
+  r.setAttribute("data-theme", cur==="dark"?"light":"dark");
+  applyTheme();
+};
+$("#btnTop").onclick=()=>window.scrollTo({top:0,behavior:"smooth"});
+
+/* build stamp + update banner */
+(function(){
+  const vc = $("#vchip");
+  if(vc){
+    vc.textContent = "v" + APP_VERSION;
+    vc.title = "Build " + APP_VERSION + "  \u00b7  scoring model " + MODEL_VERSION;
+  }
+  const bu = $("#btnUpd");       if(bu) bu.onclick = () => UPDATE.reload();
+  const bl = $("#btnUpdLater");  if(bl) bl.onclick = () => $("#updbar").classList.remove("on");
+})();
+
+applyTheme();
+
+/* ---- boot ---- */
+libLoad();
+syncActive();
+render();
+renderDataStrip();
+UPDATE.start();
+
+/* if a folder was connected previously, offer to reopen it */
+(async function(){
+  try{
+    const had = await FOLDER.restore();
+    if(!had) return;
+    renderDataStrip();
+    if(FOLDER.state==="connected") await loadFromFolder();
+  }catch(e){ /* folder support absent or blocked; the bar explains */ }
+})();
+
+/* expose for automated checks */
+window.__loadForTest = (text,name)=>{
+  const snap=loadSnapshot(text,name);
+  const r=addSnapshot(snap); focusNewest([r.id]);
+  renderDataStrip(); syncActive(); render();
+  return snap.rows.length;
+};
+window.__active = () => ({active:ACTIVE});
+window.__lib = () => LIB.map(s=>({id:s.id,name:s.name,stamp:s.stamp,rows:s.rows.length}));
+window.__select = (level,key)=>{ MT.level=level; MT.sel={level,key}; render(); };
+window.__series = () => {
+  if(!MT.sel) return null;
+  const H=historyAt(MT.sel.level);
+  const rec=H.rows.find(r=>r.key===MT.sel.key);
+  if(!rec) return null;
+  return rec.pts.map((p,i)=>p?{stamp:H.stamps[i], cb:p.cb, cbp:p.cbp, s:p.s, w:p.w,
+    over:p.over, nmids:p.nmids, tier:p.tier}:null).filter(Boolean);
+};
+window.__store = () => ({ok:STORE.ok});
+window.__fs = () => ({supported:FS_OK, state:FOLDER.state, name:FOLDER.name,
+  found:FOLDER.found, skipped:FOLDER.skipped, auditDir:FOLDER.AUDIT_DIR});
+window.__strip = () => {
+  const el=document.getElementById("datastrip");
+  return {title: el.querySelector(".dtitle")?.textContent.replace(/\s+/g," ").trim(),
+          sub: el.querySelector(".dsub")?.textContent.replace(/\s+/g," ").trim(),
+          buttons: [...el.querySelectorAll(".dacts button")].map(b=>b.textContent.trim()),
+          tabs: [...el.querySelectorAll(".tab .dt")].map(b=>b.textContent.trim()),
+          hasTabX: !!el.querySelector(".tab .x")};
+};
+window.__mockFolder = (files) => {
+  /* files: [{name, text}] — exercises the same scan path as a real handle */
+  FOLDER.handle = {
+    name:"MockReports",
+    async *values(){
+      for(const f of files){
+        yield {kind:"file", name:f.name,
+          async getFile(){ return {text:async()=>f.text, lastModified:Date.now()}; }};
+      }
+    },
+    async queryPermission(){ return "granted"; },
+    async requestPermission(){ return "granted"; },
+    __files:{},
+    __dirs:{},
+    async getDirectoryHandle(n,opts){
+      const self=this;
+      if(!self.__dirs[n]){
+        if(!opts||!opts.create){ const e=new Error("no dir"); e.name="NotFoundError"; throw e; }
+        self.__dirs[n]={name:n, __files:{},
+          async getFileHandle(fn,o){
+            const d=this;
+            if((!o||!o.create) && !d.__files[fn]){
+              const e=new Error("not found"); e.name="NotFoundError"; throw e;
+            }
+            return {async createWritable(){ return {
+              async write(bl){ d.__files[fn]=bl.size;
+                FOLDER.__written={dir:n, name:fn, size:bl.size}; },
+              async close(){}
+            };}};
+          }};
+      }
+      return self.__dirs[n];
+    },
+    async getFileHandle(n,opts){
+      const self=this;
+      if((!opts||!opts.create) && !self.__files[n]){
+        const e=new Error("not found"); e.name="NotFoundError"; throw e;
+      }
+      return {async createWritable(){ return {
+        async write(b){ self.__files[n]=b.size; FOLDER.__written={name:n,size:b.size}; },
+        async close(){}
+      };}};
+    }
+  };
+  FOLDER.name="MockReports"; FOLDER.state="connected";
+  return loadFromFolder();
+};
+window.__written = () => FOLDER.__written || null;
+window.__auditName = () => auditFileName();
+window.__saveToFolder = () => saveCurrentToFolder();
+window.__midTrend = () => {
+  const {all,stamps}=mtRows();
+  return {reports:stamps.length, rows:all.length,
+    sample:all.slice(0,8).map(r=>({id:r.id,d:r.d,n:r.n,
+      s:[r.first.s,r.last.s], cb:[r.first.cb,r.last.cb],
+      cbp:[r.first.cbp,r.last.cbp], dcbp:r.dcbp, status:r.status[0]}))};
+};
+window.__setMT = o => { Object.assign(MT,o); render(); };
+window.__setView = v => { VIEW.page=v; render(); };
+window.__modelState = () => JSON.parse(JSON.stringify(MODEL));
+window.__setBuckets = names => {
+  VIEW.buckets = names ? new Set(names) : null; render();
+  return VIEW.buckets ? [...VIEW.buckets] : null;
+};
+window.__bucketState = () => ({
+  selected: VIEW.buckets ? [...VIEW.buckets].sort() : null,
+  label: bucketLabel(),
+  listed: bucketStats().length
+});
+window.__view = () => ({page:VIEW.page, level:MT.level, sel:MT.sel});
+window.__levelRows = lvl => {
+  const H=historyAt(lvl);
+  return H.rows.map(r=>({key:r.key, n:r.n, nmids:r.last.nmids, over:[r.first.over,r.last.over],
+    s:[r.first.s,r.last.s], cb:[r.first.cb,r.last.cb],
+    cbp:[r.first.cbp,r.last.cbp], status:r.status[0]}));
+};
+window.__statusCounts = () => {
+  const c={}; historyAt(MT.level).rows.forEach(r=>c[r.status[0]]=(c[r.status[0]]||0)+1); return c; };
+window.__trend = () => portfolioSeries().map(x=>({
+  stamp:x.snap.stamp, crit:x.A.crit.length, high:x.A.high.length,
+  integ:x.A.integ.length, cb:x.A.E.reduce((a,e)=>a+e.cb,0)}));
+window.__MODEL=MODEL;
+window.__VERSION=()=>({app:APP_VERSION, model:MODEL_VERSION, latest:UPDATE.latest});
+window.__UPDATE=UPDATE;
+window.__exportSet=exportSet;
+window.__toTSV=toTSV;
+
+window.__THEME=THEME;
+window.__themeCSS=themeCSS;
+window.__applyTheme=applyTheme;
+window.__contrast=contrast;
+
+</script>
+</body></html>

@@ -1,0 +1,19 @@
+# Netlify / Cloudflare Pages cache rules.
+#
+# The whole point: index.html and version.json must NEVER be served from
+# cache without checking the server first, or users will sit on an old
+# build and never see the update banner.
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+/
+  Cache-Control: no-cache, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+/version.json
+  Cache-Control: no-store
+  Access-Control-Allow-Origin: *
