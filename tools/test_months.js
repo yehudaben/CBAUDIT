@@ -90,8 +90,10 @@ const LAUNCH = process.env.CHROMIUM ? {executablePath: process.env.CHROMIUM} : {
             thinFlagged: rows.filter(r=>r.thin&&r.nf>0).length};
   });
   R.thinBadgesInDom = await page.evaluate(()=>document.querySelectorAll('.thinb').length);
+  /* the month-to-date labelling was removed from the tab line in 2026.09.04
+     at the user's request; the footer note is now the only on-screen mention
+     that the portal zeroes counters on the 1st */
   R.contextHasMTD   = /month-to-date/i.test(R.contextLine||'');
-  R.contextHasDay   = /day \d+ of \d+/i.test(R.contextLine||'');
   R.headlineGone    = await page.evaluate(()=>!document.querySelector('.headline'));
   R.scoreboardGone  = await page.evaluate(()=>
     !document.getElementById('s-score') && !document.querySelector('[data-copy="score"]'));

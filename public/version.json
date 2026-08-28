@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.03",
+  "version": "2026.09.04",
   "model": "m1.0",
-  "notes": "Removes the summary paragraph and the Scoreboard section \u2014 the tiles and tab line carry what they said."
+  "notes": "Removes the remaining explanatory paragraphs from the audit, trends and tracker views."
 }

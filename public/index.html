@@ -779,7 +779,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.03";
+const APP_VERSION   = "2026.09.04";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2898,14 +2898,7 @@ function viewTabsHTML(){
     <button data-view="settings" class="${VIEW.page==="settings"?"on":""}">Settings</button>
     <span class="sp"></span>
     <span class="ctx">${VIEW.page==="audit"
-      ? (SNAP_A && SNAP_A.stamp ? (function(){
-          const p=periodOf(SNAP_A.stamp), d=dayOfMonth(SNAP_A.stamp), dm=daysInMonth(p);
-          const stamp = esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp);
-          /* counters zero on the 1st, so every figure below is month-to-date.
-             This is the only place that still says so since the headline went. */
-          return p ? `${esc(periodLabel(p))} month-to-date${d?` · day ${d} of ${dm}`:""} · ${stamp}`
-                   : "Showing "+stamp;
-        })() : "")
+      ? (SNAP_A && SNAP_A.stamp ? "Showing "+esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp) : "")
       : VIEW.page==="trends" ? "Across every report in the library"
       : VIEW.page==="tracker" ? (FOLDER.state==="connected"
           ? "Shared through "+esc(FOLDER.name)+"/"+FOLDER.TRACK_DIR+"/"
@@ -3074,13 +3067,9 @@ function trackerPageHTML(A){
     <button class="btn" id="btnTrkCsv">Download CSV</button>
   </div>`);
 
+  /* the folder-status paragraph was removed in 2026.09.04; the tab context
+     line already says whether this is shared or browser-only */
   if(TRACKER.err) P.push(`<p class="note"><b>Tracker sync problem:</b> ${esc(TRACKER.err)}</p>`);
-  P.push(`<p class="note">${FOLDER.state==="connected"
-      ? `Reading ${TRACKER.sources} team file${TRACKER.sources===1?"":"s"} from
-         <code>${esc(FOLDER.name)}/${FOLDER.TRACK_DIR}/</code>. This browser writes only
-         <code>${esc(TRACKER.fileName())}</code>, so nobody can overwrite anyone.`
-      : `Not connected to a folder, so this list is private to this browser. Connect one on the
-         Audit tab and every change is shared with whoever points at the same folder.`}</p>`);
 
   if(tab==="board"){
     if(!TRACKER.list().length){
@@ -3276,15 +3265,8 @@ function portfolioTrendHTML(){
   return `<h2 id="s-trend">Portfolio trend
       <span class="n">${ser.length} report${ser.length===1?"":"s"}</span>
       <button class="cp" data-copy="trend">Copy</button></h2>
-    <p class="lede">Every report in the library as a time series. ${ser.length<2
-      ? "Load more reports — or connect a folder of them — and these fill in."
-      : `Spanning ${esc(niceStamp(ser[0].snap.stamp)?niceStamp(ser[0].snap.stamp).full:ser[0].snap.name)}
-         to ${esc(niceStamp(last.snap.stamp)?niceStamp(last.snap.stamp).full:last.snap.name)}.`}
-      Portfolio CB % is total chargebacks over total sales, so it is dominated by the largest
-      merchants and moves far less than any single MID.${nPer>1
-        ? ` Counters reset on the 1st, so the lines are cut at each month boundary and the change
-           shown is against the previous report <em>within the same month</em>.`
-        : ""}</p>
+    ${ser.length<2 ? `<p class="lede">Load more reports — or connect a folder of them —
+      and these fill in.</p>` : ""}
     <div class="trend">${cards}</div>
     <div class="scroll"><table><thead><tr>
       <th class="na">Report</th><th class="na">Month</th><th class="n na">MIDs</th><th class="n na">Act today</th>
@@ -3305,9 +3287,7 @@ function portfolioTrendHTML(){
           <td class="n">${tot>0?(cb/tot*100).toFixed(3)+"%":"n/a"}</td></tr>`;
       }).join("")}
     </tbody></table></div>
-    <p class="note">Reports are ordered by the timestamp in their filename where present, otherwise
-      by file modification time. Loading many reports recomputes each one, so a large folder takes a
-      moment on first scan.</p>`;
+    `;
 }
 
 /* ---------- section nav + scroll affordances ---------- */
@@ -3529,8 +3509,6 @@ function render(){
   add(`<h2 id="s-act"><span class="badge"><span class="dot d-c"></span>Act today</span>
     <span class="n">weighted ${MODEL.tierCrit}+ · ${fCrit.length}${filtering?" of "+A.crit.length:""} MIDs</span>
     <button class="cp" data-copy="crit">Copy</button></h2>`);
-  add(`<p class="lede">Every row here has realized chargeback damage past the ${MODEL.f5Cbp}% monitoring
-    ceiling. Ordered by weighted score, then chargeback count.</p>`);
   add(fCrit.length ? fCrit.map(e=>cardHTML(e)).join("") : '<p class="note">No MIDs in this tier.</p>');
 
   /* B — high */
@@ -3553,9 +3531,6 @@ function render(){
   add(`<h2 id="s-mon"><span class="badge"><span class="dot d-m"></span>Monitor</span>
     <span class="n">weighted 1–${MODEL.tierHigh-1} · ${fMon.length}${filtering?" of "+A.mon.length:""} MIDs</span>
     <button class="cp" data-copy="mon">Copy</button></h2>`);
-  add(`<p class="lede">Single-flag rows with no realized CB-rate breach. Several carry large absolute
-    chargeback counts on large sales volume — the rate keeps them out of monitoring range, but the
-    uncovered Amex and Discover losses are real money.</p>`);
   add(fMon.length ? `<ul class="flat">${sortRows(fMon).map(e=>`<li>
       ${trackBtn(e)}<span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
       <span class="pill">${e.pri}</span>
@@ -3566,8 +3541,6 @@ function render(){
   if(fQuar.length){
     add(`<h2 id="s-quar"><span class="badge"><span class="dot d-c"></span>Data quarantine</span>
       <span class="n">CB % above 100% · ${fQuar.length}</span></h2>`);
-    add(`<p class="lede">Ranked on arithmetic alone but held out of the tiers above — the numbers are
-      almost certainly wrong, and acting on them would mean acting on a reporting error.</p>`);
     add(fQuar.map(e=>cardHTML(e,"h")).join(""));
   }
 

@@ -88,11 +88,12 @@ Because counters zero on the 1st:
   first→last delta reads the reset as a large improvement — this was a real bug
   with a real example: one MID showed **−1 CB (looks fixed)** when the truth
   inside August was **+1 CB (getting worse)**.
-- **The month-to-date labelling lives in the view-tabs context line**
-  (`Aug 2026 month-to-date · day 14 of 31 · 14 Aug 2026 00:00`). The headline
-  paragraph that used to carry it was removed in 2026.09.03; that line is now
-  the only place on screen saying the figures are month-to-date, so do not
-  quietly drop it. `test_months.js` asserts it still says so.
+- **Nothing on the audit screen says "month-to-date" any more.** The headline
+  went in 2026.09.03 and the tab-line label in 2026.09.04, both at the user's
+  request. The footer note (`counters reset to zero on the 1st`) is the only
+  remaining on-screen mention; `test_months.js` asserts it is still there via
+  `footerPeriod`. The reset still governs every calculation — it is simply no
+  longer narrated. Do not re-add prose about it without being asked.
 - Sparklines are cut at the boundary (`breaks` map passed to `sparkSVG` /
   `miniSpark.breaks`). The **Per day** toggle (`MT.norm`) divides month-to-date
   totals by day-of-month so the line runs continuously; CB % is already a rate
@@ -117,11 +118,20 @@ Documented in the file's own header comment:
 Key functions: `score()`, `tierOf()`, `analyse()`, `historyAt()`,
 `trendsPageHTML()`, `momHTML()`, `exportSet()`, `periodOf()`.
 
-Removed in 2026.09.03 at the user's request: the headline summary paragraph
-and the whole Scoreboard section (its heading, both tables, its nav chip and
-its `exportSet("score")` path). `FLAGDEF` is now unreferenced — it was only
-read by the scoreboard — and `analyse()` still computes `nfTiers`, which
-nothing renders. Both left in place deliberately; delete them only on purpose.
+Removed at the user's request, and not to be reinstated without asking:
+
+- 2026.09.03 — the headline summary paragraph, and the whole Scoreboard
+  section (heading, both tables, nav chip, `exportSet("score")` path).
+- 2026.09.04 — the month-to-date tab label, the Act today / Monitor /
+  Quarantine section ledes, the report-ordering note under the trends table,
+  the portfolio-trend lede, and the tracker's folder-status paragraph.
+
+**The user wants figures, not narration.** When adding a feature, give it a
+heading and the numbers; do not explain it on screen.
+
+Left unreferenced by those removals, deliberately not deleted: `FLAGDEF` (the
+scoreboard was its only reader), `nfTiers` in `analyse()`, `nPer` in
+`trendsPageHTML()`, and the `.headline` / `.mtd` / `.mtdnote` CSS rules.
 
 Test hooks are exposed on `window.__*` (`__loadForTest`, `__lib`, `__trend`,
 `__exportSet`, `__setView`, `__VERSION`, …). Add one rather than reaching into
