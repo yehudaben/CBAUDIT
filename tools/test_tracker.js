@@ -1,0 +1,224 @@
+const {chromium} = require('playwright');
+const fs = require('fs');
+const path = require('path');
+/* Same environment contract as the other tests: BASE_URL to point at a
+   served copy, SAMPLE_CSV for the portal export (kept out of git). */
+const BASE   = process.env.BASE_URL   || 'http://127.0.0.1:8111';
+const ROOT   = path.resolve(__dirname, '..');
+const FIX    = process.env.FIXTURES   || path.join(ROOT, 'fixtures');
+const SAMPLE = process.env.SAMPLE_CSV || path.join(FIX, 'sample.csv');
+const LAUNCH = process.env.CHROMIUM ? {executablePath: process.env.CHROMIUM} : {};
+
+/* Real MIDs from the 14 Aug baseline, chosen for what they exercise:
+   894949 has 585 sales (clears the thin floor) and RDR coverage 81.8%;
+   967398 has 180 sales, so every verdict on it must be withheld;
+   916148 has 146 sales; 199485 is Summit Apex, RDR coverage 0. */
+const M_FAT  = '0567000000894949';
+const M_THIN = '0567000000967398';
+const M_APEX = '0700100000199485';
+const OLD    = '2026-07-25T09:00:00Z';   // 19 days before the report — lag elapsed
+const NEW    = '2026-08-13T09:00:00Z';   // 1 day before — lag not elapsed
+const FUT    = '2026-09-20T09:00:00Z';   // after the newest report
+
+const ev = (id, mid, op, extra) =>
+  Object.assign({id, ts: OLD, dev: 'test', mid, op}, extra || {});
+const base = o => Object.assign(
+  {stamp: '2026-07-24 09:00:00', cov: 0, cbp: 4, mcs: 50, s: 500, cb: 20}, o || {});
+
+(async () => {
+  const browser = await chromium.launch(LAUNCH);
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE: ' + m.text()); });
+
+  const R = {};
+  await page.goto(BASE + '/index.html', {waitUntil: 'networkidle'});
+  /* start from a clean tracker — localStorage survives between runs */
+  await page.evaluate(() => { try { localStorage.removeItem('cbrc.tracker.v1'); } catch (e) {} });
+  await page.reload({waitUntil: 'networkidle'});
+  R.bootErrors = errs.slice();
+
+  const csv = fs.readFileSync(SAMPLE, 'utf8');
+  await page.evaluate(t => window.__loadForTest(t, '2026-08-14-0901.csv'), csv);
+  await page.waitForTimeout(900);
+  R.afterLoadErrors = errs.slice(R.bootErrors.length);
+
+  /* ---- 1. the control exists on every actionable row, and toggles ---- */
+  R.trackControls = await page.evaluate(() => document.querySelectorAll('[data-track]').length);
+  R.toggle = await page.evaluate(async () => {
+    const b = document.querySelector('[data-track]');
+    const mid = b.getAttribute('data-track');
+    b.click();
+    const on = window.__tracker().rows.length;
+    document.querySelector(`[data-track="${mid}"]`).click();
+    const off = window.__tracker().rows.length;
+    return {on, off, mid};
+  });
+
+  /* ---- 2. the action defaults to what the row's own flags argue for ---- */
+  R.suggested = await page.evaluate(m => {
+    const t = window.__track(m);
+    return {action: t.action, status: t.status};
+  }, M_APEX);
+
+  /* ---- 3. Done captures a baseline; it must not be invented ---- */
+  R.baselineOnDone = await page.evaluate(m => {
+    const t = window.__trackStatus(m, 'done');
+    return {status: t.status, hasBaseline: !!t.baseline, doneAt: !!t.doneAt,
+            cov: t.baseline ? t.baseline.cov : null};
+  }, M_APEX);
+
+  /* ---- 4. every verdict branch, driven from an injected log ---- */
+  R.verdicts = await page.evaluate(a => {
+    const [FAT, THIN, APEX, OLD, NEW, FUT] = a;
+    const mk = (id, mid, op, x) => Object.assign({id, ts: OLD, dev: 'test', mid, op}, x || {});
+    const bl = o => Object.assign(
+      {stamp: '2026-07-24 09:00:00', cov: 0, cbp: 4, mcs: 50, s: 500, cb: 20}, o || {});
+    const out = {};
+
+    const run = (label, evs) => {
+      window.__trackInject(evs);
+      const o = window.__outcomes();
+      out[label] = o.map(x => ({mid: x.mid, verdict: x.verdict,
+        base: x.base == null ? null : +Number(x.base).toFixed(x.dp),
+        now:  x.now  == null ? null : +Number(x.now ).toFixed(x.dp),
+        elapsed: x.elapsedDays}));
+    };
+
+    /* RDR fix, coverage 0 -> 81.8 on 585 sales */
+    run('improved', [mk('a1', FAT, 'track', {action: 'RDR Fix (ARN Lookup)'}),
+                     mk('a2', FAT, 'status', {value: 'done', baseline: bl({cov: 0})})]);
+    /* MC fix, share 40 -> 64 on 585 sales */
+    run('worse',    [mk('b1', FAT, 'track', {action: 'MC Fix (Descriptor Lookup)'}),
+                     mk('b2', FAT, 'status', {value: 'done', baseline: bl({mcs: 40})})]);
+    /* CB % identical at the displayed precision */
+    run('flat',     [mk('c1', FAT, 'track', {action: 'Watch'}),
+                     mk('c2', FAT, 'status', {value: 'done', baseline: bl({cbp: 4.2735042})})]);
+    /* 180 sales: under the thin floor, so no verdict even though it moved */
+    run('thin',     [mk('d1', THIN, 'track', {action: 'MC Fix (Descriptor Lookup)'}),
+                     mk('d2', THIN, 'status', {value: 'done', baseline: bl({mcs: 80})})]);
+    /* done one day before the report — inside the lag window */
+    run('tooEarly', [mk('e1', FAT, 'track', {action: 'RDR Fix (ARN Lookup)', ts: NEW}),
+                     mk('e2', FAT, 'status', {value: 'done', ts: NEW, baseline: bl({cov: 10})})]);
+    /* done after the newest report exists — nothing to measure yet */
+    run('noReport', [mk('f1', FAT, 'track', {action: 'RDR Fix (ARN Lookup)', ts: FUT}),
+                     mk('f2', FAT, 'status', {value: 'done', ts: FUT, baseline: bl({cov: 0})})]);
+    /* a MID that is not in this report at all */
+    run('missing',  [mk('g1', '9999999999999999', 'track', {action: 'Watch'}),
+                     mk('g2', '9999999999999999', 'status', {value: 'done', baseline: bl()})]);
+    return out;
+  }, [M_FAT, M_THIN, M_APEX, OLD, NEW, FUT]);
+
+  /* ---- 5. two people, two files, no overwrite ----
+     Events from two devices fold into one state, and the later timestamp
+     wins the field without erasing the earlier event from the log. */
+  R.merge = await page.evaluate(a => {
+    const [FAT] = a;
+    const evs = [
+      {id: 'A-1', ts: '2026-08-01T10:00:00Z', dev: 'A', mid: FAT, op: 'track', action: 'Watch'},
+      {id: 'B-1', ts: '2026-08-02T10:00:00Z', dev: 'B', mid: FAT, op: 'action',
+       value: 'MC Fix (Descriptor Lookup)'},
+      {id: 'A-2', ts: '2026-08-03T10:00:00Z', dev: 'A', mid: FAT, op: 'status', value: 'doing'},
+      {id: 'B-2', ts: '2026-08-04T10:00:00Z', dev: 'B', mid: FAT, op: 'status', value: 'done',
+       baseline: {stamp: '2026-08-04 10:00:00', cov: 0, cbp: 4, mcs: 40, s: 500, cb: 20}}
+    ];
+    window.__trackInject(evs);
+    const t = window.__tracker().rows[0];
+    /* the same events applied in reverse order must fold identically */
+    window.__trackInject(evs.slice().reverse());
+    const t2 = window.__tracker().rows[0];
+    return {action: t.action, status: t.status, hasBaseline: t.hasBaseline,
+            orderIndependent: JSON.stringify(t) === JSON.stringify(t2),
+            eventsKept: evs.length};
+  }, [M_FAT]);
+
+  /* ---- 6. untrack removes the row entirely ---- */
+  R.untrack = await page.evaluate(a => {
+    const [FAT] = a;
+    window.__trackInject([
+      {id: 'u1', ts: '2026-08-01T10:00:00Z', dev: 'A', mid: FAT, op: 'track', action: 'Watch'},
+      {id: 'u2', ts: '2026-08-02T10:00:00Z', dev: 'A', mid: FAT, op: 'untrack'}
+    ]);
+    return window.__tracker().rows.length;
+  }, [M_FAT]);
+
+  /* ---- 7. the export keeps the workbook's first 20 columns, MID as text ---- */
+  R.exportShape = await page.evaluate(a => {
+    const [FAT] = a;
+    window.__trackInject([
+      {id: 'x1', ts: '2026-08-01T10:00:00Z', dev: 'A', mid: FAT, op: 'track',
+       action: 'RDR Fix (ARN Lookup)'}
+    ]);
+    const set = trackerExportSet();
+    /* index by header, and read the TSV: merchant names contain commas, so
+       splitting the CSV on "," lands in the wrong field */
+    const i = set.head.indexOf('MID');
+    const cell = toTSV(set).split('\n')[1].split('\t')[i];
+    const rawMid = String(set.rows[0][i]).replace(/[="]/g, '');
+    return {cols: set.head.length,
+            first20: set.head.slice(0, 20).join('|'),
+            added: set.head.slice(20),
+            midIndex: i,
+            midCell: cell,
+            midIsText: /^="\d{16}"$/.test(cell),
+            csvHasTextWrapper: toCSV(set).indexOf('=""' + rawMid + '""') >= 0};
+  }, [M_FAT]);
+
+  /* ---- 8. the audit export is untouched by any of this ---- */
+  R.auditExportUnchanged = await page.evaluate(() => {
+    const set = window.__exportSet('all');
+    return {cols: set.head.length, order: set.head.join('|')};
+  });
+
+  R.finalErrors = errs.slice(R.bootErrors.length + R.afterLoadErrors.length);
+  console.log(JSON.stringify(R, null, 2));
+
+  /* ---- assertions: zero tolerance, same as every other step ---- */
+  const fail = [];
+  const want = (cond, msg) => { if (!cond) fail.push(msg); };
+
+  want(R.bootErrors.length === 0, 'boot errors: ' + R.bootErrors.join(' | '));
+  want(R.afterLoadErrors.length === 0, 'errors after load: ' + R.afterLoadErrors.join(' | '));
+  want(R.finalErrors.length === 0, 'errors during tracker use: ' + R.finalErrors.join(' | '));
+  want(R.trackControls === 91, 'expected 91 track controls, got ' + R.trackControls);
+  want(R.toggle.on === 1 && R.toggle.off === 0, 'track toggle did not round-trip');
+  want(R.suggested.action === 'RDR Fix (ARN Lookup)',
+       'F1/F2 row should suggest the RDR fix, got ' + R.suggested.action);
+  want(R.suggested.status === 'required', 'a new row must start as required');
+  want(R.baselineOnDone.hasBaseline && R.baselineOnDone.doneAt,
+       'Done must capture a baseline and a timestamp');
+
+  const v = (k) => (R.verdicts[k] && R.verdicts[k][0]) || {};
+  want(v('improved').verdict === 'improved', 'coverage 0 -> 81.8 should read improved');
+  want(v('worse').verdict === 'worse', 'MC share 40 -> 64 should read worse');
+  want(v('flat').verdict === 'flat', 'an unchanged rate should read no change');
+  want(v('thin').verdict === 'thin', 'a 180-sale MID must not get a verdict');
+  want(v('tooEarly').verdict === 'too-early', 'inside the lag window there is no verdict');
+  want(v('noReport').verdict === 'no-report-since', 'a fix newer than the report has nothing to measure');
+  want(v('missing').verdict === 'missing', 'a MID absent from the report must say so');
+
+  want(R.merge.action === 'MC Fix (Descriptor Lookup)', 'the later action should win the merge');
+  want(R.merge.status === 'done', 'the later status should win the merge');
+  want(R.merge.hasBaseline, 'the winning done event must carry its baseline');
+  want(R.merge.orderIndependent, 'the fold must not depend on the order files are read in');
+  want(R.untrack === 0, 'untrack must remove the row');
+
+  want(R.exportShape.cols === 27, 'tracker export should be 27 columns, got ' + R.exportShape.cols);
+  want(R.exportShape.first20 ===
+       'Action|Bucket|Merch.|DBA|MID|# Sales|$ Sales|CB #|CB Volume|CB %|$ Refunds|Refund %|MC|Visa|# RDR|RDR Coverage %|Amex|Disc|Tier|Action',
+       'the first 20 columns must match the workbook exactly');
+  want(R.exportShape.midIsText, 'MID must be written as text, got ' + R.exportShape.midCell);
+  want(R.exportShape.csvHasTextWrapper, 'the CSV must carry the same text wrapper as the TSV');
+  want(R.auditExportUnchanged.cols === 21, 'the audit export must stay at 21 columns');
+  want(R.auditExportUnchanged.order ===
+       'Tier|Flags|Primary|Action|Bucket|Merchant|DBA|MID|# Sales|$ Sales|CB #|CB Volume|CB %|$ Refunds|Refund %|MC|Visa|# RDR|RDR Coverage %|Amex|Disc',
+       'the audit export order must not drift');
+
+  console.log('\ntracker assertions        : ' + (fail.length ? fail.length + ' FAILED' : '0 failures'));
+  fail.forEach(f => console.log('  FAIL  ' + f));
+
+  await browser.close();
+  process.exit(fail.length ? 1 : 0);
+})();

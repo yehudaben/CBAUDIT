@@ -30,6 +30,7 @@ step "B — arithmetic"               python3 tools/audit_B_math.py
 step "C — grading"                  python3 tools/audit_C_grading.py
 step "boot + update banner"         node tools/test_boot.js
 step "monthly reset behaviour"      node tools/test_months.js
+step "tracker + outcomes"           node tools/test_tracker.js
 
 echo "======================================================"
 [ $fail -eq 0 ] && echo "all steps ran. Read the counts above — a step can" \

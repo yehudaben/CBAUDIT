@@ -1,5 +1,5 @@
 {
-  "version": "2026.08.29",
+  "version": "2026.08.30",
   "model": "m1.0",
-  "notes": "Portal counters reset on the 1st \u2014 figures are now labelled month-to-date, trends never compare across the reset, and there is a Versus last month view."
+  "notes": "Adds the Tracker: mark deals action required, in progress or done, share it with your team through a connected folder, and see in Outcomes whether the fix actually moved the number."
 }

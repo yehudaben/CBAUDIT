@@ -471,6 +471,64 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .views .sp{flex:1}
 .views .ctx{font-size:var(--fs-xs);color:var(--muted);padding-right:4px}
 
+/* ---- tracker ------------------------------------------------------
+   Written against the theme tokens above, like everything else. The
+   track toggle sits inside an existing cell so no table gains a column. */
+.trk{display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;margin-right:6px;padding:0;flex:none;vertical-align:baseline;
+  font-size:var(--fs-xs);font-weight:700;line-height:1;cursor:pointer;
+  background:var(--surface);color:var(--muted);
+  border:1px solid var(--axis);border-radius:var(--r-sm)}
+.trk:hover{color:var(--ink);background:var(--wash2);border-color:var(--ink)}
+.trk.on{background:var(--good);border-color:var(--good);color:#fff}
+.trkhead{display:flex;gap:calc(6px*var(--d));align-items:center;flex-wrap:wrap;
+  margin:calc(10px*var(--d)) 0 calc(6px*var(--d))}
+.trkhead .sp{flex:1}
+.trktabs{display:flex;gap:2px}
+.trktabs button{background:none;border:1px solid var(--axis);border-radius:var(--r-sm);
+  padding:calc(5px*var(--d)) calc(11px*var(--d));font-weight:600;color:var(--ink2);cursor:pointer}
+.trktabs button.on{background:var(--ink);color:var(--page);border-color:var(--ink)}
+.trktabs button .c{opacity:.65;margin-left:5px;font-weight:500}
+.agrp{border:1px solid var(--grid);border-radius:var(--r-sm);margin:calc(8px*var(--d)) 0;
+  overflow:hidden;background:var(--surface)}
+.agrp .ahd{padding:calc(6px*var(--d)) calc(11px*var(--d));font-weight:700;
+  font-size:var(--fs-sm);background:var(--wash);border-bottom:1px solid var(--grid)}
+.agrp .ahd .n{color:var(--muted);font-weight:500;margin-left:6px}
+.trow,.orow{padding:calc(8px*var(--d)) calc(11px*var(--d));border-top:1px solid var(--grid)}
+.agrp .trow:first-of-type{border-top:none}
+.orow{border:1px solid var(--grid);border-radius:var(--r-sm);background:var(--surface);
+  margin:calc(6px*var(--d)) 0}
+.trow .tmain,.orow .tmain{display:flex;gap:7px;align-items:baseline;flex-wrap:wrap}
+.trow .nm,.orow .nm{font-weight:700}
+.trow .dba,.orow .dba{color:var(--ink2)}
+.trow .mid,.orow .mid{font-variant-numeric:tabular-nums;font-size:var(--fs-xs);color:var(--muted)}
+.trow .tmeta,.orow .tmeta{display:flex;gap:calc(8px*var(--d));align-items:center;
+  flex-wrap:wrap;margin-top:calc(5px*var(--d))}
+.trow .cur,.orow .cur{font-size:var(--fs-sm);color:var(--ink2)}
+.orow .ac{font-size:var(--fs-xs);font-weight:700;padding:1.5px 6px;border-radius:var(--r-sm);
+  background:var(--wash2);color:var(--ink2)}
+.trkact{padding:3px 6px;border:1px solid var(--axis);border-radius:var(--r-sm);
+  background:var(--surface)}
+.trkst{display:inline-flex;gap:2px;flex-wrap:wrap}
+.trkst button{background:var(--surface);border:1px solid var(--axis);color:var(--ink2);
+  padding:3px calc(8px*var(--d));font-size:var(--fs-xs);font-weight:600;cursor:pointer;
+  border-radius:var(--r-sm)}
+.trkst button:hover{color:var(--ink);background:var(--wash2)}
+.trkst button.on{background:var(--ink);color:var(--page);border-color:var(--ink)}
+.trkx,.trkc{background:none;border:1px solid transparent;color:var(--muted);
+  font-size:var(--fs-xs);font-weight:600;cursor:pointer;padding:3px 7px;border-radius:var(--r-sm)}
+.trkx:hover{color:var(--crit);border-color:var(--crit)}
+.trkc{border-color:var(--axis);color:var(--ink2)}
+.trkc:hover{color:var(--ink);border-color:var(--ink)}
+.vd{font-size:var(--fs-xs);font-weight:700;padding:1.5px 7px;border-radius:var(--r-sm);
+  border:1px solid currentColor}
+.vd.v-ok{color:var(--good)}
+.vd.v-no{color:var(--crit)}
+.vd.v-wt{color:var(--warn)}
+.vd.v-fl{color:var(--muted)}
+.orow .dlt{font-variant-numeric:tabular-nums;font-size:var(--fs-xs);color:var(--muted);margin-left:4px}
+.tile.g .val{color:var(--good)}
+
 /* ---- level segmented control ---- */
 .seg{display:inline-flex;border:var(--bw) solid var(--border);border-radius:var(--r-sm);
   overflow:hidden;background:var(--page)}
@@ -719,7 +777,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.08.29";
+const APP_VERSION   = "2026.08.30";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -803,7 +861,7 @@ const PRIMARY_LABEL = {
 /* ---------- state ---------- */
 let SNAP_A = null, SNAP_B = null;
 let VIEW = {page:"audit", buckets:null, bkOpen:false, bkQ:"",
-            tier:"__all", q:"", sort:{key:"w", dir:-1}};
+            tier:"__all", q:"", sort:{key:"w", dir:-1}, trackTab:"board"};
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -1755,6 +1813,272 @@ const FOLDER = {
     await w.write(new Blob([text],{type:"text/csv"}));
     await w.close();
     return name;
+  },
+
+  /* tracker state lives in its own subfolder. scan() skips directories, so
+     nothing in here can ever be read back as a portal export. */
+  TRACK_DIR: "tracker",
+  async trackDir(create){
+    if(!this.handle) throw new Error("No folder connected.");
+    return this.handle.getDirectoryHandle(this.TRACK_DIR, {create:!!create});
+  },
+  async readTracker(){
+    if(!this.handle || this.state!=="connected") return [];
+    let dir;
+    try{ dir = await this.trackDir(false); }
+    catch(e){ return []; }                       /* no tracker/ yet — not an error */
+    const files=[];
+    for await (const entry of dir.values()){
+      if(entry.kind!=="file" || !/\.jsonl$/i.test(entry.name)) continue;
+      try{
+        const text = await (await entry.getFile()).text();
+        files.push({name:entry.name, text});
+      }catch(e){ /* a half-synced file: skip it, the next read picks it up */ }
+    }
+    return files;
+  },
+  async writeTracker(name, text){
+    if(!this.handle || this.state!=="connected") throw new Error("No folder connected.");
+    const dir = await this.trackDir(true);
+    const fh = await dir.getFileHandle(name, {create:true});
+    const w = await fh.createWritable();
+    await w.write(new Blob([text],{type:"application/x-ndjson"}));
+    await w.close();
+    return name;
+  }
+};
+
+/* ============================================================
+   TRACKER — which deals the team is acting on, and whether it worked.
+
+   State is a log of events, never a document. Each browser appends only to
+   its own file in <folder>/tracker/, so two browsers can never write the
+   same file: no locking, no overwritten edit, no sync conflict copy. Every
+   browser reads all the files and folds them by timestamp.
+
+   Nothing here touches MODEL or scoring. A tracked row is identified by MID
+   as a string — never a number, or the leading zero is lost and the row can
+   no longer be joined to next month's export.
+   ============================================================ */
+const TRACK_STATUS = ["required","doing","done","closed"];
+const TRACK_LABEL = {required:"Action required", doing:"In progress",
+                     done:"Action done", closed:"Closed"};
+
+/* Each action type is judged by the metric that would actually move if the
+   fix landed — a generic CB % delta calls an RDR fix a failure for weeks
+   while it is quietly working. Every metric here is a RATE: counts cannot be
+   compared across the 1st, when the portal zeroes every counter. */
+const TRACK_ACTIONS = {
+  "RDR Fix (ARN Lookup)":       {metric:"cov", good:"up",   label:"RDR coverage %", dp:1},
+  "MC Fix (Descriptor Lookup)": {metric:"mcs", good:"down", label:"MC share %",     dp:1},
+  "Agent Flag":                 {metric:"cbp", good:"down", label:"CB %",           dp:2},
+  "Watch":                      {metric:"cbp", good:"down", label:"CB %",           dp:2}
+};
+const TRACK_ACTION_NAMES = Object.keys(TRACK_ACTIONS);
+
+function trackStampMs(v){
+  if(!v) return null;
+  const s = String(v).indexOf("T")>0 ? String(v) : String(v).replace(" ","T");
+  const t = Date.parse(s);
+  return isNaN(t) ? null : t;
+}
+const DAY_MS = 86400000;
+
+const TRACKER = {
+  LS_EV:"cbrc.tracker.v1", LS_DEV:"cbrc.tracker.device", LS_LAG:"cbrc.tracker.lag",
+  mine:[], all:[], state:{}, sources:0, syncedAt:null, err:null, seq:0,
+
+  /* Chargebacks post weeks after the sale, so a fix cannot show up at once.
+     This is a SETTING, not a measured figure — there is no verified dispute
+     lag for this portfolio, so it is exposed and left to the operator. */
+  lagDays: 14,
+
+  device(){
+    let d=null;
+    try{ d = localStorage.getItem(this.LS_DEV); }catch(e){}
+    if(!d){
+      d = Math.random().toString(16).slice(2,6) + Math.random().toString(16).slice(2,6);
+      try{ localStorage.setItem(this.LS_DEV,d); }catch(e){}
+    }
+    return d;
+  },
+  fileName(){ return "events-"+this.device()+".jsonl"; },
+
+  loadLocal(){
+    try{
+      const raw = localStorage.getItem(this.LS_EV);
+      this.mine = raw ? JSON.parse(raw) : [];
+      if(!Array.isArray(this.mine)) this.mine=[];
+    }catch(e){ this.mine=[]; }
+    try{
+      const lg = localStorage.getItem(this.LS_LAG);
+      if(lg!==null && lg!=="" && !isNaN(+lg)) this.lagDays = Math.max(0,Math.round(+lg));
+    }catch(e){}
+    this.seq = this.mine.length;
+    this.fold();
+  },
+  saveLocal(){
+    try{ localStorage.setItem(this.LS_EV, JSON.stringify(this.mine)); }catch(e){}
+  },
+  setLag(d){
+    this.lagDays = Math.max(0, Math.round(+d||0));
+    try{ localStorage.setItem(this.LS_LAG, String(this.lagDays)); }catch(e){}
+  },
+
+  /* ---- the log ---- */
+  push(ev){
+    const dev = this.device();
+    ev.dev = dev;
+    ev.id  = dev + "-" + (++this.seq);
+    ev.ts  = new Date().toISOString();
+    this.mine.push(ev);
+    this.saveLocal();
+    this.fold();
+    this.flush();                                  /* fire and forget */
+    return ev;
+  },
+  async flush(){
+    if(FOLDER.state!=="connected") return false;
+    try{
+      const text = this.mine.map(e=>JSON.stringify(e)).join("\n") + (this.mine.length?"\n":"");
+      await FOLDER.writeTracker(this.fileName(), text);
+      this.err=null; return true;
+    }catch(e){ this.err = e.message||String(e); return false; }
+  },
+  async sync(){
+    if(FOLDER.state!=="connected"){ this.sources=0; this.fold(); return false; }
+    try{
+      const files = await FOLDER.readTracker();
+      const seen = {}, out = [];
+      const take = ev => { if(ev && ev.id && !seen[ev.id]){ seen[ev.id]=1; out.push(ev); } };
+      this.mine.forEach(take);
+      files.forEach(f=>{
+        f.text.split(/\r?\n/).forEach(line=>{
+          if(!line.trim()) return;
+          try{ take(JSON.parse(line)); }catch(e){ /* torn line mid-sync — skip */ }
+        });
+      });
+      this.all = out;
+      this.sources = files.length;
+      this.syncedAt = new Date().toISOString();
+      this.fold(true);
+      await this.flush();
+      this.err=null;
+      return true;
+    }catch(e){ this.err = e.message||String(e); return false; }
+  },
+
+  /* last event per MID wins, ordered by timestamp then id so the fold is
+     deterministic when two clocks agree to the millisecond */
+  fold(useAll){
+    const src = (useAll && this.all.length) ? this.all : (this.all.length ? this.all : this.mine);
+    const evs = src.slice().sort((a,b)=>
+      (trackStampMs(a.ts)||0) - (trackStampMs(b.ts)||0) || String(a.id).localeCompare(String(b.id)));
+    const st = {};
+    evs.forEach(ev=>{
+      const mid = ev.mid; if(!mid) return;
+      if(ev.op==="untrack"){ delete st[mid]; return; }
+      const cur = st[mid] || (st[mid] = {mid, status:"required", action:"Watch",
+                                         trackedAt:ev.ts, baseline:null, doneAt:null,
+                                         note:"", updatedAt:ev.ts});
+      if(ev.op==="track"){ if(ev.action) cur.action = ev.action; }
+      else if(ev.op==="action"){ cur.action = ev.value; }
+      else if(ev.op==="note"){ cur.note = ev.value||""; }
+      else if(ev.op==="status"){
+        cur.status = ev.value;
+        if(ev.value==="done"){ cur.doneAt = ev.ts; if(ev.baseline) cur.baseline = ev.baseline; }
+      }
+      cur.updatedAt = ev.ts;
+    });
+    this.state = st;
+    return st;
+  },
+
+  /* ---- reading ---- */
+  get(mid){ return this.state[mid] || null; },
+  list(){ return Object.keys(this.state).map(k=>this.state[k]); },
+  byStatus(s){ return this.list().filter(r=>r.status===s); },
+  counts(){
+    const c={required:0,doing:0,done:0,closed:0};
+    this.list().forEach(r=>{ if(c[r.status]!==undefined) c[r.status]++; });
+    return c;
+  },
+
+  /* ---- writing ---- */
+  track(mid, action){
+    if(!mid) return null;
+    return this.push({mid:String(mid), op:"track", action: action || this.suggest(mid)});
+  },
+  untrack(mid){ return this.push({mid:String(mid), op:"untrack"}); },
+  setAction(mid, value){ return this.push({mid:String(mid), op:"action", value}); },
+  setNote(mid, value){ return this.push({mid:String(mid), op:"note", value:String(value||"")}); },
+  setStatus(mid, value){
+    if(TRACK_STATUS.indexOf(value)<0) throw new Error("unknown status: "+value);
+    const ev = {mid:String(mid), op:"status", value};
+    /* the baseline is captured at Done and travels with the event, so the
+       verdict cannot drift when old reports leave the library */
+    if(value==="done"){
+      const b = this.snapshotFor(mid);
+      if(b) ev.baseline = b;
+    }
+    return this.push(ev);
+  },
+
+  /* the action a row's own flags argue for, used as the default */
+  suggest(mid){
+    const A = window.__A, e = A && A.byMid ? A.byMid[mid] : null;
+    if(!e) return "Watch";
+    if(e.F.indexOf("F2")>=0 || e.F.indexOf("F1")>=0) return "RDR Fix (ARN Lookup)";
+    if(e.F.indexOf("F3")>=0) return "MC Fix (Descriptor Lookup)";
+    return "Watch";
+  },
+  snapshotFor(mid){
+    const A = window.__A, e = A && A.byMid ? A.byMid[mid] : null;
+    if(!e) return null;
+    return {stamp: (SNAP_A && SNAP_A.stamp) || null,
+            cov:e.cov, cbp:e.cbp, mcs:e.mcs, s:e.s, cb:e.cb, vi:e.vi, mc:e.mc, rn:e.rn};
+  },
+
+  /* ---- did it work? ----
+     Two gates before any verdict is shown: the lag window must have passed,
+     and the denominator must clear the same thin floor used everywhere else.
+     Below either, the honest answer is "not yet", not a number. */
+  outcome(mid){
+    const t = this.state[mid];
+    if(!t) return null;
+    const spec = TRACK_ACTIONS[t.action] || TRACK_ACTIONS["Watch"];
+    const A = window.__A, cur = A && A.byMid ? A.byMid[mid] : null;
+    const out = {mid, action:t.action, status:t.status, spec,
+                 metric:spec.metric, metricLabel:spec.label, dp:spec.dp,
+                 base:null, now:null, delta:null, verdict:"pending",
+                 elapsedDays:null, sales:cur?cur.s:null, thinFloor:MODEL.thinSales,
+                 reportStamp:(SNAP_A&&SNAP_A.stamp)||null,
+                 baseStamp:t.baseline?t.baseline.stamp:null};
+
+    if(t.status!=="done" && t.status!=="closed"){ out.verdict="not-done"; return out; }
+    if(!t.baseline){ out.verdict="no-baseline"; return out; }
+    if(!cur){ out.verdict="missing"; return out; }
+
+    const bMs = trackStampMs(t.doneAt), rMs = trackStampMs(out.reportStamp);
+    if(bMs!==null && rMs!==null) out.elapsedDays = Math.floor((rMs-bMs)/DAY_MS);
+
+    out.base = t.baseline[spec.metric];
+    out.now  = cur[spec.metric];
+
+    if(out.base==null || out.now==null){ out.verdict="not-available"; return out; }
+    /* the newest report predates the fix — there is nothing yet to measure
+       against, which is a different problem from waiting out the lag */
+    if(out.elapsedDays!==null && out.elapsedDays < 0){ out.verdict="no-report-since"; return out; }
+    if(out.elapsedDays!==null && out.elapsedDays < this.lagDays){ out.verdict="too-early"; return out; }
+    if(cur.s < MODEL.thinSales){ out.verdict="thin"; return out; }
+
+    const r = v => +Number(v).toFixed(spec.dp);
+    const rb = r(out.base), rn = r(out.now);
+    out.delta = out.now - out.base;
+    if(rb===rn) out.verdict = "flat";
+    else if(spec.good==="up")  out.verdict = rn>rb ? "improved" : "worse";
+    else                       out.verdict = rn<rb ? "improved" : "worse";
+    return out;
   }
 };
 
@@ -2481,6 +2805,16 @@ function modelPanelHTML(A){
         a merchant past it.</span></div>
     </div>
     <div class="setblock">
+      <h4>Tracker measurement lag <span class="out">— not part of the scoring model</span></h4>
+      <div class="setrow">Wait <input type="number" id="trkLag" value="${TRACKER.lagDays}"
+        step="1" min="0" style="width:70px"> days after a fix before showing a verdict</div>
+      <div class="setrow"><span class="out">Chargebacks post weeks after the sale, so a fix cannot
+        show up immediately. <b>This is a setting, not a measured figure</b> — there is no verified
+        dispute lag for this portfolio, so set it from your own experience. Until it elapses an
+        outcome reads <em>too early</em> rather than guessing. Unlike the scoring knobs above, this
+        one persists in this browser.</span></div>
+    </div>
+    <div class="setblock">
       <h4>Tier cutoffs</h4>
       <div class="setrow"><span class="badge"><span class="dot d-c"></span>Act today</span>
         at weighted ${numIn("tierCrit",M.tierCrit,1)} and above</div>
@@ -2519,11 +2853,17 @@ function viewTabsHTML(){
     <button data-view="audit" class="${VIEW.page==="audit"?"on":""}">Audit</button>
     <button data-view="trends" class="${VIEW.page==="trends"?"on":""}">Trends
       <span class="c">${nRep} report${nRep===1?"":"s"}</span></button>
+    <button data-view="tracker" class="${VIEW.page==="tracker"?"on":""}">Tracker
+      ${(function(){const c=TRACKER.counts(), open=c.required+c.doing;
+         return open?`<span class="c">${open} open</span>`:"";})()}</button>
     <button data-view="settings" class="${VIEW.page==="settings"?"on":""}">Settings</button>
     <span class="sp"></span>
     <span class="ctx">${VIEW.page==="audit"
       ? (SNAP_A && SNAP_A.stamp ? "Showing "+esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp) : "")
       : VIEW.page==="trends" ? "Across every report in the library"
+      : VIEW.page==="tracker" ? (FOLDER.state==="connected"
+          ? "Shared through "+esc(FOLDER.name)+"/"+FOLDER.TRACK_DIR+"/"
+          : "This browser only — connect a folder to share with your team")
       : "Scoring, appearance and export layout"}</span>
   </div>`;
 }
@@ -2583,10 +2923,225 @@ function momHTML(H, shown, isMid){
       has no prior final to compare against.</p>`;
 }
 
+/* ============================================================
+   TRACKER PAGE — Board is the worklist, Outcomes is the follow-up audit.
+   Neither reads or writes MODEL; both read the active report only to show
+   the current value of whichever metric the action is judged by.
+   ============================================================ */
+const VERDICT = {
+  improved:{t:"improved",       c:"v-ok"},
+  worse:   {t:"worse",          c:"v-no"},
+  flat:    {t:"no change",      c:"v-fl"},
+  "too-early":{t:"too early",   c:"v-wt"},
+  thin:    {t:"not enough sales yet", c:"v-wt"},
+  "no-report-since":{t:"no report since the fix", c:"v-wt"},
+  missing: {t:"not in this report",   c:"v-wt"},
+  "no-baseline":{t:"no baseline captured", c:"v-wt"},
+  "not-available":{t:"not available", c:"v-wt"},
+  "not-done":{t:"not done yet",  c:"v-fl"}
+};
+function trkMetric(v, dp){
+  return v==null ? "not available" : Number(v).toFixed(dp)+"%";
+}
+function actionSelect(mid, cur){
+  return `<select class="trkact" data-action-for="${esc(mid)}">${
+    TRACK_ACTION_NAMES.map(n=>`<option value="${esc(n)}"${n===cur?" selected":""}>${esc(n)}</option>`)
+    .join("")}</select>`;
+}
+function statusBtns(mid, cur){
+  return `<span class="trkst">${TRACK_STATUS.map(st=>
+    `<button class="${st===cur?"on":""}" data-status-for="${esc(mid)}" data-status="${st}"
+       >${esc(TRACK_LABEL[st])}</button>`).join("")}</span>`;
+}
+function trackerRowHTML(t, A){
+  const e = A && A.byMid ? A.byMid[t.mid] : null;
+  const spec = TRACK_ACTIONS[t.action] || TRACK_ACTIONS["Watch"];
+  const now = e ? e[spec.metric] : null;
+  return `<div class="trow">
+    <div class="tmain">
+      <span class="nm">${esc(e?e.m:t.mid)}</span>
+      ${e?`<span class="dba">— ${esc(e.d)}</span>`:`<span class="dba">— not in this report</span>`}
+      <span class="mid">${esc(t.mid)}</span>
+      ${e?`<span class="pill">${esc(tierOf(e))}</span>`:""}
+    </div>
+    <div class="tmeta">
+      ${actionSelect(t.mid, t.action)}
+      <span class="cur">${esc(spec.label)} now <b>${trkMetric(now, spec.dp)}</b></span>
+      ${statusBtns(t.mid, t.status)}
+      <button class="trkx" data-untrack="${esc(t.mid)}" title="Stop tracking">Remove</button>
+    </div>
+  </div>`;
+}
+function outcomeRowHTML(o, A){
+  const e = A && A.byMid ? A.byMid[o.mid] : null;
+  const v = VERDICT[o.verdict] || {t:o.verdict, c:"v-fl"};
+  const showN = ["improved","worse","flat"].indexOf(o.verdict)>=0;
+  let detail;
+  if(showN){
+    const d = o.now - o.base;
+    detail = `<b>${trkMetric(o.base,o.dp)}</b> → <b>${trkMetric(o.now,o.dp)}</b>
+      <span class="dlt">${d>0?"+":""}${d.toFixed(o.dp)} pts</span>`;
+  } else if(o.verdict==="thin"){
+    detail = `${fmtN(o.sales)} of ${fmtN(o.thinFloor)} sales — too small a denominator to read`;
+  } else if(o.verdict==="too-early"){
+    detail = `${o.elapsedDays} of ${TRACKER.lagDays} days since the fix`;
+  } else if(o.verdict==="no-report-since"){
+    detail = `newest report is ${esc(o.reportStamp||"undated")}, the fix came after it`;
+  } else if(o.verdict==="missing"){
+    detail = `this MID is not in the active report`;
+  } else {
+    detail = `baseline ${trkMetric(o.base,o.dp)}`;
+  }
+  return `<div class="orow">
+    <div class="tmain">
+      <span class="nm">${esc(e?e.m:o.mid)}</span>
+      ${e?`<span class="dba">— ${esc(e.d)}</span>`:""}
+      <span class="mid">${esc(o.mid)}</span>
+      <span class="vd ${v.c}">${esc(v.t)}</span>
+    </div>
+    <div class="tmeta">
+      <span class="ac">${esc(o.action)}</span>
+      <span class="cur">${esc(o.metricLabel)} · ${detail}</span>
+      ${o.status==="done"
+        ? `<button class="trkc" data-status-for="${esc(o.mid)}" data-status="closed">Close</button>`
+        : `<button class="trkc" data-status-for="${esc(o.mid)}" data-status="done">Reopen</button>`}
+    </div>
+  </div>`;
+}
+function trackerPageHTML(A){
+  const c = TRACKER.counts();
+  const open = c.required + c.doing;
+  const tab = VIEW.trackTab==="outcomes" ? "outcomes" : "board";
+  const P=[];
+  P.push(`<div class="trkhead">
+    <div class="trktabs">
+      <button data-trktab="board" class="${tab==="board"?"on":""}">Board
+        <span class="c">${open}</span></button>
+      <button data-trktab="outcomes" class="${tab==="outcomes"?"on":""}">Outcomes
+        <span class="c">${c.done+c.closed}</span></button>
+    </div>
+    <span class="sp"></span>
+    <button class="btn" id="btnTrkSync">${FOLDER.state==="connected"?"Sync with team":"Connect a folder"}</button>
+    <button class="btn" id="btnTrkCopy">Copy</button>
+    <button class="btn" id="btnTrkCsv">Download CSV</button>
+  </div>`);
+
+  if(TRACKER.err) P.push(`<p class="note"><b>Tracker sync problem:</b> ${esc(TRACKER.err)}</p>`);
+  P.push(`<p class="note">${FOLDER.state==="connected"
+      ? `Reading ${TRACKER.sources} team file${TRACKER.sources===1?"":"s"} from
+         <code>${esc(FOLDER.name)}/${FOLDER.TRACK_DIR}/</code>. This browser writes only
+         <code>${esc(TRACKER.fileName())}</code>, so nobody can overwrite anyone.`
+      : `Not connected to a folder, so this list is private to this browser. Connect one on the
+         Audit tab and every change is shared with whoever points at the same folder.`}</p>`);
+
+  if(tab==="board"){
+    if(!TRACKER.list().length){
+      P.push(`<div class="empty">Nothing tracked yet. Press <b>+</b> beside any merchant on the
+        Audit tab to put it on the board.</div>`);
+      return P.join("");
+    }
+    ["required","doing","done"].forEach(st=>{
+      const rows = TRACKER.byStatus(st);
+      P.push(`<h2><span class="badge"><span class="dot ${st==="required"?"d-c":st==="doing"?"d-h":"d-m"}"></span>
+        ${esc(TRACK_LABEL[st])}</span><span class="n">${rows.length} MID${rows.length===1?"":"s"}</span></h2>`);
+      if(!rows.length){ P.push(`<p class="note">None.</p>`); return; }
+      /* grouped by action, so four MIDs needing the same operation read as one job */
+      const byAct={}; rows.forEach(r=>(byAct[r.action]||(byAct[r.action]=[])).push(r));
+      Object.keys(byAct).sort().forEach(act=>{
+        P.push(`<div class="agrp"><div class="ahd">${esc(act)}
+          <span class="n">${byAct[act].length}</span></div>
+          ${byAct[act].map(t=>trackerRowHTML(t,A)).join("")}</div>`);
+      });
+    });
+    const closed = TRACKER.byStatus("closed");
+    if(closed.length) P.push(`<p class="note">${closed.length} closed —
+      see the Outcomes tab.</p>`);
+    return P.join("");
+  }
+
+  /* ---- outcomes ---- */
+  const outs = TRACKER.list().filter(r=>r.status==="done"||r.status==="closed")
+                 .map(r=>TRACKER.outcome(r.mid));
+  P.push(`<p class="lede">Every fix marked done, measured against the numbers captured at the time.
+    Each action is judged by the rate that would move if it worked — never a count, because the portal
+    zeroes every counter on the 1st and a count would read the reset as a success.</p>`);
+  if(!outs.length){
+    P.push(`<div class="empty">No fixes marked done yet. Move a row to
+      <b>Action done</b> on the Board and its baseline is captured automatically.</div>`);
+    return P.join("");
+  }
+  const tally={};
+  outs.forEach(o=>tally[o.verdict]=(tally[o.verdict]||0)+1);
+  P.push(`<div class="tiles">${["improved","flat","worse"].map(k=>
+    `<div class="tile${k==="improved"?" g":k==="worse"?" c":""}"><div class="lab">${esc(VERDICT[k].t)}</div>
+      <div class="val">${tally[k]||0}</div></div>`).join("")}
+    <div class="tile"><div class="lab">waiting</div><div class="val">${
+      outs.length - (tally.improved||0) - (tally.flat||0) - (tally.worse||0)}</div>
+      <div class="sub">lag, thin or no report yet</div></div>
+  </div>`);
+  const order = ["worse","flat","improved","thin","too-early","no-report-since","missing",
+                 "no-baseline","not-available","not-done"];
+  outs.sort((a,b)=>order.indexOf(a.verdict)-order.indexOf(b.verdict));
+  P.push(outs.map(o=>outcomeRowHTML(o,A)).join(""));
+  P.push(`<p class="note">A verdict appears only once the fix has had
+    <b>${TRACKER.lagDays} days</b> and the MID clears <b>${fmtN(MODEL.thinSales)} sales</b>.
+    The lag is a setting, not a measured figure — change it in Settings.</p>`);
+  return P.join("");
+}
+
 function wireViews(){
   document.querySelectorAll("[data-view]").forEach(b=>{
     b.onclick=()=>{ VIEW.page=b.getAttribute("data-view"); window.scrollTo(0,0); render(); };
   });
+  /* ---- tracker ---- */
+  document.querySelectorAll("[data-track]").forEach(b=>{
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      const mid=b.getAttribute("data-track");
+      if(TRACKER.get(mid)) TRACKER.untrack(mid); else TRACKER.track(mid);
+      render();
+    };
+  });
+  document.querySelectorAll("[data-trktab]").forEach(b=>{
+    b.onclick=()=>{ VIEW.trackTab=b.getAttribute("data-trktab"); render(); };
+  });
+  document.querySelectorAll("[data-status-for]").forEach(b=>{
+    b.onclick=()=>{
+      TRACKER.setStatus(b.getAttribute("data-status-for"), b.getAttribute("data-status"));
+      render();
+    };
+  });
+  document.querySelectorAll("[data-action-for]").forEach(sel=>{
+    sel.onchange=()=>{ TRACKER.setAction(sel.getAttribute("data-action-for"), sel.value); render(); };
+  });
+  document.querySelectorAll("[data-untrack]").forEach(b=>{
+    b.onclick=()=>{ TRACKER.untrack(b.getAttribute("data-untrack")); render(); };
+  });
+  const lagIn=$("#trkLag");
+  if(lagIn) lagIn.onchange=()=>{ TRACKER.setLag(lagIn.value); render(); };
+  const bSync=$("#btnTrkSync");
+  if(bSync) bSync.onclick=async()=>{
+    if(FOLDER.state!=="connected"){
+      try{ await FOLDER.pick(); renderDataStrip(); await loadFromFolder(); }
+      catch(e){ showErr("Could not open that folder: "+(e.message||e)); return; }
+    }
+    const ok = await TRACKER.sync();
+    render();
+    toast(ok ? `Synced — ${TRACKER.sources} team file${TRACKER.sources===1?"":"s"}.`
+             : `Sync failed: ${TRACKER.err||"unknown"}`);
+  };
+  const bCopy=$("#btnTrkCopy");
+  if(bCopy) bCopy.onclick=async()=>{
+    const set=trackerExportSet();
+    if(await copySet(set))
+      toast(`${set.rows.length} tracked MID${set.rows.length===1?"":"s"} copied. Paste into Sheets.`);
+  };
+  const bCsv=$("#btnTrkCsv");
+  if(bCsv) bCsv.onclick=()=>{
+    const set=trackerExportSet(), name=trackerFileName();
+    downloadText(name, "\uFEFF"+toCSV(set));
+    toast(`Downloaded ${name} — ${set.rows.length} row${set.rows.length===1?"":"s"}.`);
+  };
   document.querySelectorAll("[data-lvl]").forEach(b=>{
     b.onclick=()=>{ MT.level=b.getAttribute("data-lvl"); MT.sel=null; render(); };
   });
@@ -2767,6 +3322,16 @@ function thinTag(e){
     + `${fmtN(MODEL.thinSales)} floor. One more chargeback moves this rate a long way, so treat it `
     + `as provisional until the month fills in.">thin</span>`;
 }
+/* One control, used on every actionable row. Costs no table column: it sits
+   inside the cell that already carries the merchant name. */
+function trackBtn(e){
+  const t = TRACKER.get(e.id);
+  const on = !!t;
+  const ttl = on ? "Tracked — "+esc(t.action)+" · "+esc(TRACK_LABEL[t.status]||t.status)
+                 : "Track this MID";
+  return `<button class="trk${on?" on":""}" data-track="${esc(e.id)}" title="${ttl}"
+    aria-pressed="${on?"true":"false"}">${on?"✓":"+"}</button>`;
+}
 function cardHTML(e, cls){
   const pills = e.F.map(f=>`<span class="pill">${f}</span>`).join("");
   const cbpTxt = e.cbp===null ? "<b>no sales — data integrity flag</b>" : `<b>${e.cbp.toFixed(2)}%</b>`;
@@ -2774,7 +3339,7 @@ function cardHTML(e, cls){
   const warn = e.bad ? `<div class="act"><span class="ar">⚠</span><b>CB % above 100% — verify the data before acting.</b>
       Refunds and disputes exceed sales, which points to a reporting or settlement-window error rather than merchant behaviour.</div>` : "";
   return `<div class="card ${cls||""}">
-    <div class="r1"><span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
+    <div class="r1">${trackBtn(e)}<span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
       <span class="mid">${esc(e.id)}</span></div>
     <div class="r2"><span class="sc">Weighted ${e.w}</span> · ${pills} ·
       Primary: ${esc(PRIMARY_LABEL[e.pri]||"—")} · ${esc(e.b)}</div>
@@ -2867,6 +3432,11 @@ function render(){
     finishRender(P, A, V);
     return;
   }
+  if(VIEW.page==="tracker"){
+    add(trackerPageHTML(A));
+    finishRender(P, A, V);
+    return;
+  }
   if(VIEW.page==="settings"){
     add(settingsPageHTML(A));
     finishRender(P, A, V);
@@ -2938,7 +3508,7 @@ function render(){
     <button class="cp" data-copy="high">Copy</button></h2>`);
   add(`<div class="scroll"><table><thead><tr>${thHTML()}<th class="na">Flags</th><th class="na">Primary</th></tr></thead><tbody>
     ${sortRows(fHigh).map(e=>`<tr>
-      <td>${esc(e.m)}<div class="mono">${esc(e.id)}</div></td>
+      <td>${trackBtn(e)}${esc(e.m)}<div class="mono">${esc(e.id)}</div></td>
       <td>${esc(e.d)}</td><td>${esc(e.b)}</td>
       <td class="n"><strong>${e.w}</strong></td><td class="n">${e.cb}</td>
       <td class="n">${e.cbp===null?"n/a":e.cbp.toFixed(2)+"%"}${thinTag(e)}</td>
@@ -2956,7 +3526,7 @@ function render(){
     chargeback counts on large sales volume — the rate keeps them out of monitoring range, but the
     uncovered Amex and Discover losses are real money.</p>`);
   add(fMon.length ? `<ul class="flat">${sortRows(fMon).map(e=>`<li>
-      <span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
+      ${trackBtn(e)}<span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
       <span class="pill">${e.pri}</span>
       <span class="tr">${esc(triggerFor(e))}</span>${thinTag(e)}</li>`).join("")}</ul>`
     : '<p class="note">No MIDs in this tier.</p>');
@@ -2986,7 +3556,7 @@ function render(){
       <th class="na">Merchant</th><th class="na">DBA</th><th class="na">MID</th><th class="na">Bucket</th>
       <th class="n na">CB #</th><th class="n na">CB volume</th><th class="n na">Refunds</th>
       <th class="n na">RDR</th><th class="n na">Vi/MC/Ax/Di</th></tr></thead><tbody>
-    ${fInteg.map(e=>`<tr><td>${esc(e.m)}</td><td>${esc(e.d)}</td>
+    ${fInteg.map(e=>`<tr><td>${trackBtn(e)}${esc(e.m)}</td><td>${esc(e.d)}</td>
       <td class="mono">${esc(e.id)}</td><td>${esc(e.b)}</td>
       <td class="n"><strong>${e.cb}</strong></td><td class="n">${fmtM(e.cv)}</td>
       <td class="n">${fmtM(e.dr)}</td><td class="n">${e.rn}</td>
@@ -3140,7 +3710,7 @@ const EXPORT_COLS = [
   {h:"Bucket",          k:"b"},
   {h:"Merchant",        k:"m"},
   {h:"DBA",             k:"d"},
-  {h:"MID",             k:"id",      mono:true},
+  {h:"MID",             k:"id",      mono:true, text:true},
   {h:"# Sales",         k:"s",       int:true},
   {h:"$ Sales",         k:"ds",      money:true, sep:true},
   {h:"CB #",            k:"cb",      int:true},
@@ -3388,12 +3958,22 @@ function auditBaseName(){
 function auditFileName(){ return auditBaseName()+".csv"; }
 
 /* ---- serialisers ---- */
+/* Identifiers must never reach a spreadsheet as numbers. A MID like
+   0700100000199484 is parsed as a float by Excel and Google Sheets, which
+   drops the leading zero and makes the row impossible to join back to a
+   portal export. ="…" is the one wrapper both of them read as text. */
+function asText(set, i, v){
+  const col = set.cols && set.cols[i];
+  return (col && col.text && String(v)!=="") ? '="' + String(v).replace(/"/g,'') + '"' : v;
+}
 function toTSV(set){
-  return [set.head.join("\t")].concat(set.rows.map(r=>r.join("\t"))).join("\n");
+  return [set.head.join("\t")]
+    .concat(set.rows.map(r=>r.map((v,i)=>asText(set,i,v)).join("\t"))).join("\n");
 }
 function toCSV(set){
   const q=v=>/[",\n]/.test(String(v))?'"'+String(v).replace(/"/g,'""')+'"':String(v);
-  return [set.head.map(q).join(",")].concat(set.rows.map(r=>r.map(q).join(","))).join("\n");
+  return [set.head.map(q).join(",")]
+    .concat(set.rows.map(r=>r.map((v,i)=>q(asText(set,i,v))).join(","))).join("\n");
 }
 /* Google Sheets honours pasted HTML, so the thick group rules and
    bold header survive the paste. Plain TSV rides along as fallback. */
@@ -3405,11 +3985,100 @@ function toHTML(set){
       padding:4px 6px;font-weight:700;text-align:left">${esc(h)}</th>`).join("");
   const body = set.rows.map(r=>"<tr>"+r.map((v,i)=>{
     const numeric = set.cols ? !!(set.cols[i].int||set.cols[i].money||set.cols[i].pct) : false;
+    const asTxt = set.cols && set.cols[i] && set.cols[i].text;
     return `<td style="border:1px solid #e1e0d9;${sep.has(i)?THICK:""};padding:3px 6px;
+      ${asTxt?"mso-number-format:'\\@';":""}
       text-align:${numeric?"right":"left"}">${esc(v)}</td>`;
   }).join("")+"</tr>").join("");
   return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">
     <thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+/* ============================================================
+   TRACKER EXPORT — the first 20 columns are exactly the workbook's own
+   layout, so nothing about the team's habits has to change. The 7 status
+   columns the spreadsheet never had are appended, not interleaved.
+   This is NOT the 21-column audit export, which is unchanged.
+   ============================================================ */
+const TRACK_COLS = [
+  {h:"Action",          k:"tAction"},
+  {h:"Bucket",          k:"b"},
+  {h:"Merch.",          k:"m"},
+  {h:"DBA",             k:"d"},
+  {h:"MID",             k:"id",      mono:true, text:true},
+  {h:"# Sales",         k:"s",       int:true},
+  {h:"$ Sales",         k:"ds",      money:true},
+  {h:"CB #",            k:"cb",      int:true},
+  {h:"CB Volume",       k:"cv",      money:true},
+  {h:"CB %",            k:"cbp",     pct:2},
+  {h:"$ Refunds",       k:"dr",      money:true},
+  {h:"Refund %",        k:"rfp",     pct:1},
+  {h:"MC",              k:"mc",      int:true},
+  {h:"Visa",            k:"vi",      int:true},
+  {h:"# RDR",           k:"rn",      int:true},
+  {h:"RDR Coverage %",  k:"cov",     pct:1},
+  {h:"Amex",            k:"ax",      int:true},
+  {h:"Disc",            k:"dc",      int:true},
+  {h:"Tier",            k:"tier"},
+  {h:"Action",          k:"action",  sep:true},
+  {h:"Status",          k:"tStatus"},
+  {h:"Done on",         k:"tDone"},
+  {h:"Measured by",     k:"tMetric"},
+  {h:"Baseline",        k:"tBase"},
+  {h:"Now",             k:"tNow"},
+  {h:"Verdict",         k:"tVerdict"},
+  {h:"Days since",      k:"tDays"}
+];
+function trackerRows(){
+  const A=window.__A;
+  return TRACKER.list().map(t=>{
+    const e = A && A.byMid ? A.byMid[t.mid] : null;
+    const o = TRACKER.outcome(t.mid);
+    const spec = TRACK_ACTIONS[t.action] || TRACK_ACTIONS["Watch"];
+    const base = e ? Object.assign({}, e) : {id:t.mid, m:"", d:"", b:""};
+    return Object.assign(base, {
+      tAction:  t.action,
+      tier:     e ? tierOf(e) : "not in report",
+      action:   e ? actionFor(e) : "",
+      tStatus:  TRACK_LABEL[t.status] || t.status,
+      tDone:    t.doneAt ? String(t.doneAt).slice(0,10) : "",
+      tMetric:  spec.label,
+      tBase:    (o && o.base!=null) ? Number(o.base).toFixed(spec.dp)+"%" : "",
+      tNow:     (o && o.now!=null)  ? Number(o.now).toFixed(spec.dp)+"%"  : "",
+      tVerdict: o ? ((VERDICT[o.verdict]||{}).t || o.verdict) : "",
+      tDays:    (o && o.elapsedDays!=null) ? String(o.elapsedDays) : ""
+    });
+  });
+}
+function trackerExportSet(){
+  const rows = trackerRows();
+  const sepAfter = TRACK_COLS.map((c,i)=>c.sep?i:-1).filter(i=>i>=0);
+  return {label:"Tracker", cols:TRACK_COLS, head:TRACK_COLS.map(c=>c.h), sepAfter,
+          rows: rows.map(r=>TRACK_COLS.map(c=>cellFor(r,c).replace(/[\t\r\n]/g," ")))};
+}
+function trackerFileName(){ return auditBaseName().replace(/-AUDIT$/,"")+"-TRACKER.csv"; }
+
+async function copySet(set){
+  const tsv=toTSV(set), html=toHTML(set);
+  try{
+    if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      await navigator.clipboard.write([ new ClipboardItem({
+        "text/html": new Blob([html],{type:"text/html"}),
+        "text/plain": new Blob([tsv],{type:"text/plain"})
+      })]);
+      return true;
+    }
+    await navigator.clipboard.writeText(tsv);
+    return true;
+  }catch(e){
+    showErr("Could not reach the clipboard from this context. Use Download CSV instead.");
+    return false;
+  }
+}
+function downloadText(name, text){
+  const blob=new Blob([text],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
 }
 
 async function copyTSV(which){
@@ -3620,6 +4289,7 @@ applyTheme();
 
 /* ---- boot ---- */
 libLoad();
+TRACKER.loadLocal();
 syncActive();
 render();
 renderDataStrip();
@@ -3631,7 +4301,7 @@ UPDATE.start();
     const had = await FOLDER.restore();
     if(!had) return;
     renderDataStrip();
-    if(FOLDER.state==="connected") await loadFromFolder();
+    if(FOLDER.state==="connected"){ await loadFromFolder(); await TRACKER.sync(); render(); }
   }catch(e){ /* folder support absent or blocked; the bar explains */ }
 })();
 
@@ -3643,6 +4313,28 @@ window.__loadForTest = (text,name)=>{
   return snap.rows.length;
 };
 window.__active = () => ({active:ACTIVE});
+window.__tracker = () => ({
+  device:TRACKER.device(), file:TRACKER.fileName(),
+  counts:TRACKER.counts(), sources:TRACKER.sources, lagDays:TRACKER.lagDays,
+  err:TRACKER.err, rows:TRACKER.list().map(r=>({
+    mid:r.mid, action:r.action, status:r.status,
+    doneAt:r.doneAt, hasBaseline:!!r.baseline, note:r.note}))
+});
+window.__trackerEvents = () => TRACKER.mine.slice();
+window.__trackerAll = () => TRACKER.all.slice();
+window.__track = (mid,action)=>{ TRACKER.track(mid,action); render(); return TRACKER.get(mid); };
+window.__trackStatus = (mid,v)=>{ TRACKER.setStatus(mid,v); render(); return TRACKER.get(mid); };
+window.__trackAction = (mid,v)=>{ TRACKER.setAction(mid,v); render(); return TRACKER.get(mid); };
+window.__untrack = mid=>{ TRACKER.untrack(mid); render(); return TRACKER.get(mid); };
+window.__outcome = mid=>TRACKER.outcome(mid);
+window.__outcomes = ()=>TRACKER.list()
+  .filter(r=>r.status==="done"||r.status==="closed")
+  .map(r=>TRACKER.outcome(r.mid));
+window.__trackSetLag = d=>{ TRACKER.setLag(d); render(); return TRACKER.lagDays; };
+/* let a test drive the fold directly without touching the folder */
+window.__trackInject = evs => {
+  TRACKER.all = evs.slice(); TRACKER.fold(true); render(); return TRACKER.counts();
+};
 window.__lib = () => LIB.map(s=>({id:s.id,name:s.name,stamp:s.stamp,rows:s.rows.length}));
 window.__select = (level,key)=>{ MT.level=level; MT.sel={level,key}; render(); };
 window.__series = () => {

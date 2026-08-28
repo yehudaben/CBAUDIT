@@ -110,6 +110,50 @@ The 21-column audit export is unchanged.
 
 ---
 
+## The tracker
+
+**Tracker** tab. Press **+** beside any merchant on the Audit tab to put it on
+the board, tag what needs doing, and move it through **Action required → In
+progress → Action done**. Rows group by action, so four MIDs needing the same
+operation read as one job.
+
+The moment a row hits *Action done*, the console snapshots that MID's numbers.
+The **Outcomes** view then compares them against every later report and tells
+you what moved.
+
+Each action is judged by the figure that would actually change if it worked —
+an RDR fix by RDR coverage, a descriptor fix by Mastercard's share of disputes,
+a fraud review or a watch by CB %. All of them are rates, never counts, because
+the portal zeroes every counter on the 1st and a count would report the reset
+as a success every month.
+
+A verdict is withheld until it means something. Inside the lag window it reads
+*too early*; below the thin-sales floor, *not enough sales yet*; if your newest
+export predates the fix, *no report since the fix*. The tool reports movement —
+`RDR coverage 0.0% → 61.5%` — and never claims something is fixed. Closing an
+item is your call.
+
+The measurement lag is in Settings, default 14 days. **It is a setting, not a
+measured figure** — set it from your own experience of how long disputes take
+to post.
+
+### Sharing it with your team
+
+Connect the same folder — Dropbox, Drive, OneDrive, a network share — on each
+person's machine. Each browser appends only to its own file in a `tracker/`
+subfolder, so nobody can overwrite anybody; every browser reads all of them and
+merges. Press **Sync with team** to pull in what others have done.
+
+Needs Chrome or Edge, like the folder feature it builds on. Without a folder
+the tracker still works, private to that browser.
+
+**Copy** and **Download CSV** on the Tracker tab give you the workbook layout
+you already use — the same first 20 columns, plus Status, Done on, Measured by,
+Baseline, Now, Verdict and Days since. MIDs now export as text, so Excel stops
+turning `0700100000199484` into a number and dropping the leading zero.
+
+---
+
 ## What is not shared between users
 
 Each person's data is theirs alone and lives on their own computer:
@@ -117,6 +161,8 @@ Each person's data is theirs alone and lives on their own computer:
 - **Saved report tabs** — that browser's local storage, that device only.
 - **Connected audit folder** — a handle to their own disk, re-granted each
   browser session.
+- **Tracker state** — shared, but only through the folder, and only with people
+  pointing at the same one. It still never reaches a server.
 - **Theme and scoring-model tweaks** — that browser only. Model tweaks are
   session-only and reset on reload, so an updated scoring model always takes
   effect.

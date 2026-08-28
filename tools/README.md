@@ -46,6 +46,7 @@ wrong artifact — this has actually happened.
 | `audit_C_grading.py` | all 806 rows re-graded from the written spec, independently of the app's code — flags, bonus, weight, primary, tier |
 | `test_boot.js` | boots clean, parses the sample, update banner appears only on a version mismatch |
 | `test_months.js` | monthly reset: no delta crosses a reset, per-day toggle, Versus last month, thin marker |
+| `test_tracker.js` | tracker: track/untrack round-trip, baseline captured at Done, every outcome verdict, two-device merge is order-independent, MIDs exported as text, audit export still 21 columns |
 
 **Zero mismatches is the only pass.** A step can exit 0 and still print
 mismatch counts — read the numbers, do not trust the exit code alone.
