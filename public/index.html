@@ -25,6 +25,9 @@
   --warn:      #fab219;   /* [live] monitor tier, callouts           */
   --good:      #0ca30c;   /* [live] confirmations, loaded-file names */
   --accent:    #2a78d6;   /* [live] chart bars, focus rings          */
+  --gen-ink:   #9c4a16;   /*        audit-card "general problem" text.
+                              --serious is 2.6:1 on the light surface,
+                              too pale for a figure; this is 6.1:1.    */
 
   /* ---- surfaces + ink (light mode) ------------------------------ */
   --page:      #f9f9f7;   /* [live] page background                  */
@@ -75,7 +78,7 @@
   --muted:#898781; --grid:#2c2c2a; --axis:#383835;
   --border:rgba(255,255,255,0.10);
   --wash:rgba(255,255,255,0.03); --wash2:rgba(255,255,255,0.07);
-  --accent:#3987e5;
+  --accent:#3987e5; --gen-ink:#ec835a;
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
@@ -83,7 +86,7 @@
   --muted:#898781; --grid:#2c2c2a; --axis:#383835;
   --border:rgba(255,255,255,0.10);
   --wash:rgba(255,255,255,0.03); --wash2:rgba(255,255,255,0.07);
-  --accent:#3987e5;
+  --accent:#3987e5; --gen-ink:#ec835a;
 }
 
 
@@ -531,6 +534,61 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .bkt{font-size:var(--fs-xs);color:var(--ink2);background:var(--wash2);
   padding:1.5px 6px;border-radius:var(--r-sm);white-space:nowrap}
 
+/* ---- the audit card: one format for every tier ---------------------
+   The left rail names the problem family; the tinted cells say which
+   figures are the reason. Every tint sits under a label, so colour is
+   reinforcement and never the only signal. */
+.acard{background:var(--surface);border:1px solid var(--grid);
+  border-left:3px solid var(--axis);border-radius:var(--r-sm);
+  padding:calc(10px*var(--d)) calc(13px*var(--d));margin:calc(8px*var(--d)) 0}
+.acard.p-rdr{border-left-color:var(--crit)}
+.acard.p-mc {border-left-color:var(--accent)}
+.acard.p-gen{border-left-color:var(--serious)}
+
+.acard .ahead{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;
+  margin-bottom:calc(9px*var(--d))}
+.acard .ahead .nm{font-weight:700}
+.acard .ahead .dba{color:var(--ink2)}
+.acard .ahead .mid{font-size:var(--fs-xs);color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.acard .ahead .sp{flex:1}
+.acard .ahead .wt{font-weight:700;font-size:var(--fs-h2);line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+
+.mgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:1px;background:var(--grid);border:1px solid var(--grid);
+  border-radius:var(--r-sm);overflow:hidden}
+.mcell{background:var(--surface);padding:calc(5px*var(--d)) calc(8px*var(--d));
+  display:flex;flex-direction:column;gap:0;min-width:0}
+/* mark where one group of figures ends and the next begins */
+.mgrid > .mcell:nth-child(4),.mgrid > .mcell:nth-child(10){
+  box-shadow:inset 2px 0 0 -1px var(--axis)}
+.mcell.empty{background:var(--wash)}
+.mcell .ml{font-size:var(--fs-xs);color:var(--muted);letter-spacing:.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcell .mv{font-weight:650;font-variant-numeric:tabular-nums;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mcell .ms{font-size:var(--fs-xs);color:var(--ink2);font-weight:400;
+  font-variant-numeric:tabular-nums}
+.mcell .na{color:var(--muted);font-weight:400;font-size:var(--fs-xs)}
+/* tinted only where that figure is the problem */
+.mcell.c-rdr{background:rgba(208,59,59,.07)}
+.mcell.c-rdr .mv,.mcell.c-rdr .ml{color:var(--crit)}
+.mcell.c-mc {background:rgba(42,120,214,.08)}
+.mcell.c-mc  .mv,.mcell.c-mc  .ml{color:var(--accent)}
+.mcell.c-gen{background:rgba(236,131,90,.13)}
+.mcell.c-gen .mv,.mcell.c-gen .ml,.mcell.c-gen .ms{color:var(--gen-ink)}
+
+.acard .act{margin-top:calc(8px*var(--d));font-size:var(--fs-sm)}
+.acard .act .ar{color:var(--muted);margin-right:6px;font-weight:700}
+.acard .act.warnrow{color:var(--crit);font-weight:600}
+
+@media (max-width:1000px){ .mgrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:640px){
+  .mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mcell.empty{display:none}
+}
+
 /* ---- level segmented control ---- */
 .seg{display:inline-flex;border:var(--bw) solid var(--border);border-radius:var(--r-sm);
   overflow:hidden;background:var(--page)}
@@ -779,7 +837,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.04";
+const APP_VERSION   = "2026.09.05";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1282,9 +1340,15 @@ function verify(A){
 }
 
 /* ---------- action text ---------- */
+/* The "immediate review — " lead-in was dropped in 2026.09.05: it prefixed
+   almost every row and said nothing the tier had not already said. Each bit
+   now names the operation to perform. The F5 rows below the high band state
+   the target instead of an action, because the requirement is the rate, and
+   inventing a remediation for them would be guessing. */
 function actionFor(e){
   const F=e.F, bits=[];
-  if(F.indexOf("F5")>=0) bits.push(e.cbp>5 ? "immediate review — reserve or volume cap" : "immediate review");
+  if(F.indexOf("F5")>=0) bits.push(e.cbp>5 ? "reserve or volume cap"
+                                           : `reduce CB rate below ${MODEL.f5Cbp}%`);
   if(F.indexOf("F2")>=0) bits.push("enable RDR today (currently off)");
   else if(F.indexOf("F1")>=0) bits.push("raise the RDR ceiling");
   if(F.indexOf("F3")>=0) bits.push("Ethoca alerts + refund-policy and descriptor check");
@@ -3359,6 +3423,76 @@ function trackBtn(e){
   return `<button class="trk${on?" on":""}" data-track="${esc(e.id)}" title="${ttl}"
     aria-pressed="${on?"true":"false"}">${on?"✓":"+"}</button>`;
 }
+/* ============================================================
+   THE AUDIT CARD — one format for every tier.
+
+   Twelve figures in four labelled groups, always in the same places, so the
+   eye learns one layout and reads any row without re-orienting:
+
+     sales / transactions / chargebacks      volume
+     Visa CB / RDR / RDR coverage            the RDR story   — red when broken
+     refunds / refund % / MC CB              the MC story    — blue when broken
+     Amex CB / Discover CB                   the other brands
+
+   Colour reinforces the labels, it never carries meaning alone: a tinted cell
+   always sits under a label naming the metric, and the action line names the
+   fix in words.
+   ============================================================ */
+function problemClass(e){
+  /* which family is driving this row, for the card's left rail */
+  if(e.F.indexOf("F3")>=0 && e.F.indexOf("F1")<0 && e.F.indexOf("F2")<0
+     && e.F.indexOf("F5")<0) return "p-mc";
+  if(e.F.indexOf("F1")>=0 || e.F.indexOf("F2")>=0) return "p-rdr";
+  if(e.F.length) return "p-gen";
+  return "";
+}
+function mcell(label, value, cls, sub){
+  return `<div class="mcell${cls?" "+cls:""}"><span class="ml">${label}</span>` +
+         `<span class="mv">${value}${sub ? ` <span class="ms">${sub}</span>` : ""}</span></div>`;
+}
+function auditCard(e){
+  const F = e.F || [];
+  const rdrBad = F.indexOf("F1")>=0 || F.indexOf("F2")>=0;
+  const mcBad  = F.indexOf("F3")>=0;
+  const cbBad  = F.indexOf("F5")>=0;
+  const brBad  = F.indexOf("F4")>=0;
+
+  /* hard rule: zero sales with chargebacks is never rendered as a percentage */
+  const cbpTxt = e.zs ? `<span class="na">no sales — data integrity flag</span>`
+                      : (e.cbp==null ? `<span class="na">not available</span>`
+                                     : e.cbp.toFixed(2)+"%");
+  const covTxt = e.cov==null ? `<span class="na">not available</span>` : fmtP(e.cov);
+  const rfpTxt = e.rfp==null ? `<span class="na">not available</span>` : fmtP(e.rfp);
+
+  return `<div class="acard ${problemClass(e)}">
+    <div class="ahead">
+      ${trackBtn(e)}
+      <span class="nm">${esc(e.m)}</span>
+      <span class="dba">${esc(e.d)}</span>
+      <span class="mid">${esc(e.id)}</span>
+      ${e.b?`<span class="bkt">${esc(e.b)}</span>`:""}
+      <span class="sp"></span>
+      <span class="wt" title="Weighted score">${e.w}</span>
+    </div>
+    <div class="mgrid">
+      ${mcell("Sales",         fmtM(e.ds,0))}
+      ${mcell("Transactions",  fmtN(e.s))}
+      ${mcell("Chargebacks",   fmtN(e.cb), cbBad?"c-gen":"", cbpTxt+thinTag(e))}
+      ${mcell("Visa CB",       fmtN(e.vi),  rdrBad?"c-rdr":"")}
+      ${mcell("RDR",           fmtN(e.rn),  rdrBad?"c-rdr":"")}
+      ${mcell("RDR coverage",  covTxt,      rdrBad?"c-rdr":"")}
+      ${mcell("Refunds",       fmtM(e.dr,0))}
+      ${mcell("Refund %",      rfpTxt,      mcBad?"c-mc":"")}
+      ${mcell("MC CB",         fmtN(e.mc),  mcBad?"c-mc":"")}
+      ${mcell("Amex CB",       fmtN(e.ax),  brBad?"c-gen":"")}
+      ${mcell("Discover CB",   fmtN(e.dc),  brBad?"c-gen":"")}
+      <div class="mcell empty"></div>
+    </div>
+    <div class="act"><span class="ar">&rarr;</span>${esc(actionFor(e))}</div>
+    ${e.bad?`<div class="act warnrow"><span class="ar">&#9888;</span>CB % above 100% — verify before acting.</div>`:""}
+  </div>`;
+}
+
 function cardHTML(e, cls){
   const pills = e.F.map(f=>`<span class="pill">${f}</span>`).join("");
   const cbpTxt = e.cbp===null ? "<b>no sales — data integrity flag</b>" : `<b>${e.cbp.toFixed(2)}%</b>`;
@@ -3499,6 +3633,12 @@ function render(){
          ["INTEGRITY","Integrity"],["QUARANTINE","Quarantine"]]
         .map(([v,t])=>`<option value="${v}"${VIEW.tier===v?" selected":""}>${t}</option>`).join("")}
     </select>
+    <label for="selSort">Sort</label>
+    <select id="selSort">
+      ${SORTABLE.map(c=>`<option value="${c.k}"${VIEW.sort.key===c.k?" selected":""}>${esc(c.t)}</option>`).join("")}
+    </select>
+    <button class="btn" id="btnSortDir" title="Reverse the sort order"
+      >${VIEW.sort.dir<0?"High → low":"Low → high"}</button>
     <input type="search" id="q" placeholder="Search merchant, DBA, MID…" value="${esc(VIEW.q)}">
     <span class="sp"></span>
     ${bucketChipHTML()}
@@ -3509,39 +3649,28 @@ function render(){
   add(`<h2 id="s-act"><span class="badge"><span class="dot d-c"></span>Act today</span>
     <span class="n">weighted ${MODEL.tierCrit}+ · ${fCrit.length}${filtering?" of "+A.crit.length:""} MIDs</span>
     <button class="cp" data-copy="crit">Copy</button></h2>`);
-  add(fCrit.length ? fCrit.map(e=>cardHTML(e)).join("") : '<p class="note">No MIDs in this tier.</p>');
+  add(fCrit.length ? sortRows(fCrit).map(auditCard).join("")
+                   : '<p class="note">No MIDs in this tier.</p>');
 
   /* B — high */
   add(`<h2 id="s-high"><span class="badge"><span class="dot d-h"></span>High</span>
     <span class="n">weighted ${MODEL.tierHigh}–${MODEL.tierCrit-1} · ${fHigh.length}${filtering?" of "+A.high.length:""} MIDs</span>
     <button class="cp" data-copy="high">Copy</button></h2>`);
-  add(`<div class="scroll"><table><thead><tr>${thHTML()}<th class="na">Flags</th><th class="na">Primary</th></tr></thead><tbody>
-    ${sortRows(fHigh).map(e=>`<tr>
-      <td>${trackBtn(e)}${esc(e.m)}<div class="mono">${esc(e.id)}</div></td>
-      <td>${esc(e.d)}</td><td>${esc(e.b)}</td>
-      <td class="n"><strong>${e.w}</strong></td><td class="n">${e.cb}</td>
-      <td class="n">${e.cbp===null?"n/a":e.cbp.toFixed(2)+"%"}${thinTag(e)}</td>
-      <td class="n">${fmtP(e.rfp)}</td><td class="n">${e.vi}</td><td class="n">${e.rn}</td>
-      <td>${e.F.map(f=>`<span class="pill">${f}</span>`).join("")}</td>
-      <td>${esc(PRIMARY_LABEL[e.pri]||"")}</td></tr>`).join("")
-      || `<tr><td colspan="11" class="note">No MIDs in this tier.</td></tr>`}
-  </tbody></table></div>`);
+  add(fHigh.length ? sortRows(fHigh).map(auditCard).join("")
+                    : '<p class="note">No MIDs in this tier.</p>');
 
   /* C — monitor */
   add(`<h2 id="s-mon"><span class="badge"><span class="dot d-m"></span>Monitor</span>
     <span class="n">weighted 1–${MODEL.tierHigh-1} · ${fMon.length}${filtering?" of "+A.mon.length:""} MIDs</span>
     <button class="cp" data-copy="mon">Copy</button></h2>`);
-  add(fMon.length ? `<ul class="flat">${sortRows(fMon).map(e=>`<li>
-      ${trackBtn(e)}<span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
-      <span class="pill">${e.pri}</span>
-      <span class="tr">${esc(triggerFor(e))}</span>${thinTag(e)}</li>`).join("")}</ul>`
-    : '<p class="note">No MIDs in this tier.</p>');
+  add(fMon.length ? sortRows(fMon).map(auditCard).join("")
+                   : '<p class="note">No MIDs in this tier.</p>');
 
   /* quarantine */
   if(fQuar.length){
     add(`<h2 id="s-quar"><span class="badge"><span class="dot d-c"></span>Data quarantine</span>
       <span class="n">CB % above 100% · ${fQuar.length}</span></h2>`);
-    add(fQuar.map(e=>cardHTML(e,"h")).join(""));
+    add(fQuar.map(auditCard).join(""));
   }
 
   /* integrity */
@@ -3556,17 +3685,7 @@ function render(){
     CB % is undefined, so F5 can never fire and they carry no score — they cannot surface in the tiers
     above no matter how bad they get. This is a structural blind spot in the flag framework, not a quiet
     quarter: treat it as its own worklist. Most look like closed or dead MIDs still absorbing disputes.</p>`);
-  add(`<div class="scroll"><table><thead><tr>
-      <th class="na">Merchant</th><th class="na">DBA</th><th class="na">MID</th><th class="na">Bucket</th>
-      <th class="n na">CB #</th><th class="n na">CB volume</th><th class="n na">Refunds</th>
-      <th class="n na">RDR</th><th class="n na">Vi/MC/Ax/Di</th></tr></thead><tbody>
-    ${fInteg.map(e=>`<tr><td>${trackBtn(e)}${esc(e.m)}</td><td>${esc(e.d)}</td>
-      <td class="mono">${esc(e.id)}</td><td>${esc(e.b)}</td>
-      <td class="n"><strong>${e.cb}</strong></td><td class="n">${fmtM(e.cv)}</td>
-      <td class="n">${fmtM(e.dr)}</td><td class="n">${e.rn}</td>
-      <td class="n">${e.vi}/${e.mc}/${e.ax}/${e.dc}</td></tr>`).join("")
-      || `<tr><td colspan="9" class="note">None.</td></tr>`}
-  </tbody></table></div>`);
+  add(fInteg.length ? sortRows(fInteg).map(auditCard).join("") : '<p class="note">None.</p>');
   add(`<p class="note">Concentration by bucket: ${Object.keys(iByB).sort((a,b)=>iByB[b]-iByB[a])
       .map(k=>`<strong>${esc(k)}</strong> ${iByB[k]}`).join(" · ")||"—"}</p>`);
 
@@ -4122,6 +4241,10 @@ function wireDynamic(){
   const bkc=$("#bkClear");
   if(bkc) bkc.onclick=e=>{e.stopPropagation(); VIEW.buckets=null; render();};
   if(st) st.onchange=e=>{VIEW.tier=e.target.value; render();};
+  const ss=$("#selSort");
+  if(ss) ss.onchange=e=>{VIEW.sort={key:e.target.value, dir:VIEW.sort.dir}; render();};
+  const sd=$("#btnSortDir");
+  if(sd) sd.onclick=()=>{VIEW.sort={key:VIEW.sort.key, dir:VIEW.sort.dir*-1}; render();};
   if(q){
     q.oninput=e=>{
       VIEW.q=e.target.value;

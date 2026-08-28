@@ -129,9 +129,41 @@ Removed at the user's request, and not to be reinstated without asking:
 **The user wants figures, not narration.** When adding a feature, give it a
 heading and the numbers; do not explain it on screen.
 
+## The audit card
+
+Since 2026.09.05 every tier — act today, high, monitor, quarantine, integrity —
+renders through one function, `auditCard()`. Twelve figures in fixed positions
+so the eye learns the layout once:
+
+    sales · transactions · chargebacks (CB % inline)   volume
+    Visa CB · RDR · RDR coverage                       the RDR story
+    refunds · refund % · MC CB                         the MC story
+    Amex CB · Discover CB                              other brands
+
+Six columns on a wide screen, three below 1000px, two below 640px. Flags are
+not shown; the weighted score is, top right. `PRIMARY_LABEL` no longer appears
+on screen — it survives only in the export.
+
+**Colour marks which figures are the problem**, never the severity:
+`c-rdr` red (F1/F2), `c-mc` blue (F3), `c-gen` orange (F5/F4), and the card's
+left rail takes the dominant family. Every tint sits under a label naming the
+metric and the action line says the fix in words, so colour is reinforcement
+only. Measured value-on-tint contrast, alpha composited: light 4.24 / 3.90 /
+5.36, dark 3.44 / 3.65 / 5.40 — all above the 3:1 the THEME block requires.
+`--gen-ink` exists because `--serious` is only 2.6:1 as body text on the light
+surface; it is the one status colour that is not mode-invariant, and that is
+deliberate.
+
+Sorting moved from the old table headers into the controls bar (`#selSort` and
+`#btnSortDir`) when the tables became cards, and now applies to every tier
+rather than just High and Monitor.
+
 Left unreferenced by those removals, deliberately not deleted: `FLAGDEF` (the
 scoreboard was its only reader), `nfTiers` in `analyse()`, `nPer` in
-`trendsPageHTML()`, and the `.headline` / `.mtd` / `.mtdnote` CSS rules.
+`trendsPageHTML()`, the `.headline` / `.mtd` / `.mtdnote` CSS rules, and — since
+the 2026.09.05 card rewrite — `cardHTML()`, `thHTML()` and `triggerFor()`. That
+is now a fair amount of dead weight in one file; worth a deliberate sweep, but
+only as its own change with the suite run after it.
 
 Test hooks are exposed on `window.__*` (`__loadForTest`, `__lib`, `__trend`,
 `__exportSet`, `__setView`, `__VERSION`, …). Add one rather than reaching into

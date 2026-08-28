@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.04",
+  "version": "2026.09.05",
   "model": "m1.0",
-  "notes": "Removes the remaining explanatory paragraphs from the audit, trends and tracker views."
+  "notes": "One card format for every tier \u2014 twelve figures in fixed places, colour-coded by problem, weight and recommended action."
 }
