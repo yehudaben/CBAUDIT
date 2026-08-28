@@ -80,15 +80,21 @@ const LAUNCH = process.env.CHROMIUM ? {executablePath: process.env.CHROMIUM} : {
   await page.evaluate(()=>{ const b=document.querySelector('[data-norm="0"]'); b && b.click(); });
   await page.evaluate(()=>window.__setView('audit'));
   await page.waitForTimeout(600);
-  R.headline = await page.evaluate(()=>{
-    const h=document.querySelector('.headline'); return h?h.textContent.replace(/\s+/g,' ').trim():null; });
+  /* the headline block was removed in 2026.09.03; the month-to-date labelling
+     it carried now lives in the view-tabs context line */
+  R.contextLine = await page.evaluate(()=>{
+    const h=document.querySelector('.views .ctx'); return h?h.textContent.replace(/\s+/g,' ').trim():null; });
   R.thinCount = await page.evaluate(()=>{
     const rows = unpackRows(LIB.find(s=>s.id===ACTIVE).rows).map(score);
     return {thin: rows.filter(r=>r.thin).length, total: rows.length,
             thinFlagged: rows.filter(r=>r.thin&&r.nf>0).length};
   });
   R.thinBadgesInDom = await page.evaluate(()=>document.querySelectorAll('.thinb').length);
-  R.headlineHasMTD  = /month-to-date/i.test(R.headline||'');
+  R.contextHasMTD   = /month-to-date/i.test(R.contextLine||'');
+  R.contextHasDay   = /day \d+ of \d+/i.test(R.contextLine||'');
+  R.headlineGone    = await page.evaluate(()=>!document.querySelector('.headline'));
+  R.scoreboardGone  = await page.evaluate(()=>
+    !document.getElementById('s-score') && !document.querySelector('[data-copy="score"]'));
   R.footerPeriod    = await page.evaluate(()=>
     /reset to zero on the 1st/i.test(document.getElementById('foot').textContent||''));
   await page.evaluate(()=>window.__setView('settings'));

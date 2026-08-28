@@ -779,7 +779,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.02";
+const APP_VERSION   = "2026.09.03";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2898,7 +2898,14 @@ function viewTabsHTML(){
     <button data-view="settings" class="${VIEW.page==="settings"?"on":""}">Settings</button>
     <span class="sp"></span>
     <span class="ctx">${VIEW.page==="audit"
-      ? (SNAP_A && SNAP_A.stamp ? "Showing "+esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp) : "")
+      ? (SNAP_A && SNAP_A.stamp ? (function(){
+          const p=periodOf(SNAP_A.stamp), d=dayOfMonth(SNAP_A.stamp), dm=daysInMonth(p);
+          const stamp = esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp);
+          /* counters zero on the 1st, so every figure below is month-to-date.
+             This is the only place that still says so since the headline went. */
+          return p ? `${esc(periodLabel(p))} month-to-date${d?` · day ${d} of ${dm}`:""} · ${stamp}`
+                   : "Showing "+stamp;
+        })() : "")
       : VIEW.page==="trends" ? "Across every report in the library"
       : VIEW.page==="tracker" ? (FOLDER.state==="connected"
           ? "Shared through "+esc(FOLDER.name)+"/"+FOLDER.TRACK_DIR+"/"
@@ -3311,7 +3318,6 @@ function buildNav(A){
     ["s-mon","Monitor",A.mon.length],
     A.quar.length?["s-quar","Quarantine",A.quar.length]:null,
     ["s-integ","Integrity",A.integ.length],
-    ["s-score","Scoreboard",null],
     ["s-buckets","Buckets",A.buckets.length],
     ["s-pat","Patterns",null]
   ].filter(Boolean);
@@ -3464,7 +3470,6 @@ function render(){
         fMon  = A.mon.filter(passFilter),  fInteg = A.integ.filter(passFilter),
         fQuar = A.quar.filter(passFilter);
   const filtering = !!VIEW.buckets || VIEW.q || VIEW.tier!=="__all";
-  const worst = A.ranked[0];
   const P=[]; const add=s=>P.push(s);
   add(viewTabsHTML());
 
@@ -3484,24 +3489,9 @@ function render(){
     return;
   }
 
-  /* headline + tiles */
+  /* tiles — the headline summary that sat above these was removed in
+     2026.09.03; every figure it recited is in the tiles or the tab context */
   const flagged = A.ranked.length + A.quar.length;
-  const _p   = periodOf(SNAP_A.stamp);
-  const _day = dayOfMonth(SNAP_A.stamp);
-  const _dim = daysInMonth(_p);
-  const _thin= A.E.filter(e=>e.thin).length;
-  add(`<div class="headline">
-    ${_p?`<span class="mtd">${esc(periodLabel(_p))} month-to-date${_day?` — day ${_day} of ${_dim}`:""}.</span> `:""}
-    <strong>${flagged} MIDs flagged</strong> of ${A.total} reviewed ·
-    <strong>${A.crit.length} act today</strong> ${worst ? `· worst is
-    <strong>${esc(worst.m)} — ${esc(worst.d)}</strong> at weighted ${worst.w},
-    ${worst.cbp!==null?worst.cbp.toFixed(2)+"% CB":"no sales"}` : ""}.
-    A further <strong>${A.integ.length} MIDs post chargebacks against zero sales</strong>
-    and sit outside the scoring model by design.${_thin?`
-    <br><span class="mtdnote">${_thin} MID${_thin===1?" has":"s have"} under
-    ${fmtN(MODEL.thinSales)} sales so far this month and ${_thin===1?"is":"are"} marked
-    <span class="thinb">thin</span> — still ranked, but the rate sits on a small denominator.</span>`:""}
-  </div>`);
   add(`<div class="tiles">
     <div class="tile"><div class="lab">MIDs reviewed</div><div class="val">${A.total}</div>
       <div class="sub">${A.active} with activity</div></div>
@@ -3607,28 +3597,7 @@ function render(){
   add(`<p class="note">Concentration by bucket: ${Object.keys(iByB).sort((a,b)=>iByB[b]-iByB[a])
       .map(k=>`<strong>${esc(k)}</strong> ${iByB[k]}`).join(" · ")||"—"}</p>`);
 
-  /* scoreboard */
-  add(`<h2 id="s-score">Scoreboard <button class="cp" data-copy="score">Copy</button></h2>`);
-  add(`<div class="scroll"><table><thead><tr><th class="na">Flag</th><th class="na">Condition</th>
-      <th class="n na">MIDs</th></tr></thead><tbody>
-    ${["F1","F2","F3","F4","F5"].map(f=>`<tr><td><span class="pill">${f}</span></td>
-      <td>${esc(FLAGDEF[f][0])}</td><td class="n"><strong>${A.flagCounts[f]}</strong></td></tr>`).join("")}
-  </tbody></table></div>`);
-  const unfl = A.total - A.inert - A.ranked.length - A.quar.length - A.integ.length;
-  add(`<h3>Tier counts</h3><div class="scroll"><table><thead><tr><th class="na">Tier</th>
-      <th class="n na">MIDs</th></tr></thead><tbody>
-    <tr><td><span class="badge"><span class="dot d-c"></span>Act today</span></td><td class="n"><strong>${A.crit.length}</strong></td></tr>
-    <tr><td><span class="badge"><span class="dot d-h"></span>High</span></td><td class="n"><strong>${A.high.length}</strong></td></tr>
-    <tr><td><span class="badge"><span class="dot d-m"></span>Monitor</span></td><td class="n"><strong>${A.mon.length}</strong></td></tr>
-    <tr><td>Ranked subtotal</td><td class="n">${A.ranked.length}</td></tr>
-    <tr><td>Data quarantine (CB % &gt; 100%)</td><td class="n">${A.quar.length}</td></tr>
-    <tr><td>No sales — data integrity</td><td class="n">${A.integ.length}</td></tr>
-    <tr><td>Active but unflagged</td><td class="n">${unfl}</td></tr>
-    <tr><td>Inert (no sales, no chargebacks)</td><td class="n">${A.inert}</td></tr>
-    <tr><td><strong>Total MIDs reviewed</strong></td><td class="n"><strong>${A.total}</strong></td></tr>
-  </tbody></table></div>`);
-  add(`<p class="note">Unweighted flag-count tiers, for continuity with older runs:
-    ${[1,2,3,4,5].map(k=>`${k}+ ${A.nfTiers[k]}`).join(" · ")}.</p>`);
+  /* the Scoreboard section was removed in 2026.09.03 */
 
   /* buckets */
   add(renderBuckets(A));
@@ -3813,17 +3782,6 @@ function exportSet(which){
       rows:A.buckets.map(b=>[b.name,intN(b.n),intN(b.fl),intN(b.zs),intN(b.s),
         money2(b.ds),money2(b.dr),intN(b.cb),intN(b.rn),intN(b.vi),intN(b.mc),
         intN(b.ax),intN(b.dc),(b.rn===0&&b.vi>0)?"YES":""]), sepAfter:[]};
-  }
-  if(which==="score"){
-    const unfl = A.total - A.inert - A.ranked.length - A.quar.length - A.integ.length;
-    return {label:"Scoreboard", cols:null, head:["Metric","Value"], sepAfter:[],
-      rows:[["F1",A.flagCounts.F1],["F2",A.flagCounts.F2],["F3",A.flagCounts.F3],
-            ["F4",A.flagCounts.F4],["F5",A.flagCounts.F5],
-            ["Act today",A.crit.length],["High",A.high.length],["Monitor",A.mon.length],
-            ["Ranked subtotal",A.ranked.length],["Quarantine",A.quar.length],
-            ["Data integrity",A.integ.length],["Active but unflagged",unfl],
-            ["Inert",A.inert],["Total MIDs reviewed",A.total]]
-        .map(r=>[r[0], intN(r[1])])};
   }
   if(which==="mom"){
     const {shown} = mtRows();

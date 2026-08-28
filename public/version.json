@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.02",
+  "version": "2026.09.03",
   "model": "m1.0",
-  "notes": "Your tracker file can no longer be truncated if the browser clears its storage \u2014 the folder copy is reclaimed on sync."
+  "notes": "Removes the summary paragraph and the Scoreboard section \u2014 the tiles and tab line carry what they said."
 }

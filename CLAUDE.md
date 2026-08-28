@@ -88,6 +88,11 @@ Because counters zero on the 1st:
   first→last delta reads the reset as a large improvement — this was a real bug
   with a real example: one MID showed **−1 CB (looks fixed)** when the truth
   inside August was **+1 CB (getting worse)**.
+- **The month-to-date labelling lives in the view-tabs context line**
+  (`Aug 2026 month-to-date · day 14 of 31 · 14 Aug 2026 00:00`). The headline
+  paragraph that used to carry it was removed in 2026.09.03; that line is now
+  the only place on screen saying the figures are month-to-date, so do not
+  quietly drop it. `test_months.js` asserts it still says so.
 - Sparklines are cut at the boundary (`breaks` map passed to `sparkSVG` /
   `miniSpark.breaks`). The **Per day** toggle (`MT.norm`) divides month-to-date
   totals by day-of-month so the line runs continuously; CB % is already a rate
@@ -111,6 +116,12 @@ Documented in the file's own header comment:
 
 Key functions: `score()`, `tierOf()`, `analyse()`, `historyAt()`,
 `trendsPageHTML()`, `momHTML()`, `exportSet()`, `periodOf()`.
+
+Removed in 2026.09.03 at the user's request: the headline summary paragraph
+and the whole Scoreboard section (its heading, both tables, its nav chip and
+its `exportSet("score")` path). `FLAGDEF` is now unreferenced — it was only
+read by the scoreboard — and `analyse()` still computes `nfTiers`, which
+nothing renders. Both left in place deliberately; delete them only on purpose.
 
 Test hooks are exposed on `window.__*` (`__loadForTest`, `__lib`, `__trend`,
 `__exportSet`, `__setView`, `__VERSION`, …). Add one rather than reaching into
