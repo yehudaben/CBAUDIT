@@ -777,7 +777,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.08.30";
+const APP_VERSION   = "2026.08.31";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1939,6 +1939,10 @@ const TRACKER = {
   },
   async flush(){
     if(FOLDER.state!=="connected") return false;
+    /* nothing tracked yet: do not create tracker/ or drop an empty file into
+       a shared drive. Untracking is itself an event, so the only way to have
+       no events is never to have used the tracker at all. */
+    if(!this.mine.length) return false;
     try{
       const text = this.mine.map(e=>JSON.stringify(e)).join("\n") + (this.mine.length?"\n":"");
       await FOLDER.writeTracker(this.fileName(), text);
