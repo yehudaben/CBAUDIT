@@ -1,0 +1,14 @@
+# build noise
+.DS_Store
+Thumbs.db
+*.swp
+node_modules/
+
+# transfer scratch — safe to delete
+_to_delete/
+*.tgz
+
+# real merchant data must never enter git
+fixtures/*.csv
+fixtures/*.json
+!fixtures/.gitkeep

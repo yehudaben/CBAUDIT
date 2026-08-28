@@ -147,3 +147,22 @@ the tool can do rather than where it lives. Same-origin with the report grid is
 the only way it could fetch `details.jsp` directly and drop the CSV download
 step entirely. No third-party host can do this at any price — browsers block
 cross-origin authenticated requests and no code change gets around it.
+
+---
+
+## Working on this
+
+`CLAUDE.md` is the project brief — architecture, the scoring model, the
+monthly-reset rules, the invariants that must not drift, and the traps that
+have already cost time. Read it before changing `public/index.html`.
+
+`tools/` holds the verification harness. Run it before every release:
+
+```bash
+./tools/serve.sh &
+BASE_URL=http://127.0.0.1:8111 ./tools/verify.sh
+```
+
+It needs a real portal export at `fixtures/sample.csv`. **Fixtures are
+gitignored deliberately — they contain real merchant names, MIDs and volumes
+and must not enter git.**

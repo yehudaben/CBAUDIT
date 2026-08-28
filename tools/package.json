@@ -1,0 +1,12 @@
+{
+  "name": "cbaudit-tools",
+  "private": true,
+  "description": "Verification harness for the Chargeback Risk Console. Not deployed.",
+  "scripts": {
+    "serve": "./serve.sh",
+    "verify": "./verify.sh"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
