@@ -201,6 +201,19 @@ of it can move a flag, weight or tier.
   all three symptoms if it comes back.
 - Nothing is written to the folder until there is a real event, so connecting a
   folder does not litter an empty `events-*.jsonl` in a shared drive.
+- **One file per browser, rewritten in full on every change, growing forever.**
+  The name is stable (`cbrc.tracker.device`), so it is the same file being
+  updated, never a new one. About **160 bytes per event**; 20 deals a week
+  through all three states is roughly **500 KB a year**. No rotation, no
+  compaction — add one only when it is a real problem.
+- **`flush()` writes `this.mine`, so `sync()` must reclaim this device's own
+  events out of its own file first.** If `localStorage` loses the event list
+  while the device id survives, the next change would otherwise rewrite the
+  file from a short local list and destroy the rest — and in a shared drive
+  that is that person's whole contribution, not just their local history.
+  Adoption also restores `seq` from the highest id seen, so a reclaimed log
+  never reissues an id. Shipped broken in 2026.08.30, fixed in 2026.09.02;
+  `test_tracker.js` fails by name on the truncation if it returns.
 - **Statuses:** `required` → `doing` → `done` → `closed`. The baseline is
   snapshotted at **done** and stored on the event itself, so a verdict cannot
   drift when old reports leave the library.

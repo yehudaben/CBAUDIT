@@ -779,7 +779,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.01";
+const APP_VERSION   = "2026.09.02";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1958,12 +1958,38 @@ const TRACKER = {
       const seen = {}, out = [];
       const take = ev => { if(ev && ev.id && !seen[ev.id]){ seen[ev.id]=1; out.push(ev); } };
       this.mine.forEach(take);
+
+      /* Our own file is, by definition, our own history. Adopt anything in it
+         that localStorage no longer has, or the next flush would rewrite the
+         file from a short local list and destroy the rest — in a shared drive
+         that is not just our history but our whole contribution to the team's.
+         Browser storage can be evicted; the folder is the durable copy. */
+      const myName = this.fileName();
+      const mineSeen = {};
+      this.mine.forEach(e=>{ if(e && e.id) mineSeen[e.id]=1; });
+      let adopted = 0, maxSeq = this.seq;
+
       files.forEach(f=>{
+        const isMine = f.name === myName;
         f.text.split(/\r?\n/).forEach(line=>{
           if(!line.trim()) return;
-          try{ take(JSON.parse(line)); }catch(e){ /* torn line mid-sync — skip */ }
+          let ev; try{ ev = JSON.parse(line); }catch(e){ return; }  /* torn line mid-sync */
+          take(ev);
+          if(isMine && ev && ev.id && !mineSeen[ev.id]){
+            mineSeen[ev.id]=1; this.mine.push(ev); adopted++;
+            const n = +String(ev.id).split("-").pop();
+            if(!isNaN(n) && n>maxSeq) maxSeq = n;
+          }
         });
       });
+      if(adopted){
+        /* keep the file chronological, and never reissue an id we already used */
+        this.mine.sort((a,b)=>(trackStampMs(a.ts)||0)-(trackStampMs(b.ts)||0)
+                             || String(a.id).localeCompare(String(b.id)));
+        this.seq = maxSeq;
+        this.saveLocal();
+      }
+      this.adopted = adopted;
       this.all = out;
       this.sources = files.length;
       this.syncedAt = new Date().toISOString();

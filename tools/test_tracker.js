@@ -152,6 +152,41 @@ const base = o => Object.assign(
             buckets: [...document.querySelectorAll('.bkt')].map(n => n.textContent.trim())};
   }, [M_FAT, M_THIN, M_APEX]);
 
+  /* ---- 4c. a device reclaims its own history from its own file ----
+     Regression: flush() rewrites events-<id>.jsonl from this.mine alone. If
+     localStorage loses the event list while the device id survives (storage
+     eviction, a partial clear), the next change truncated the file to one
+     line — destroying that person's whole contribution to a shared drive. */
+  R.reclaim = await page.evaluate(a => {
+    const [FAT, THIN, APEX] = a;
+    const files = {};
+    FOLDER.state = 'connected'; FOLDER.name = 'TestFolder'; FOLDER.handle = {};
+    FOLDER.writeTracker = async (n, x) => { files[n] = x; return n; };
+    FOLDER.readTracker  = async () => Object.keys(files).map(n => ({name: n, text: files[n]}));
+
+    return (async () => {
+      TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0;
+      TRACKER.track(APEX); TRACKER.setStatus(APEX, 'doing');
+      TRACKER.track(FAT);  TRACKER.setStatus(FAT, 'done');
+      await TRACKER.flush();
+      const name = TRACKER.fileName();
+      const before = files[name].trim().split('\n').length;
+
+      /* lose the event list, keep the device id */
+      TRACKER.mine = []; TRACKER.seq = 0;
+      await TRACKER.sync();
+      const adopted = TRACKER.adopted, mineAfter = TRACKER.mine.length;
+
+      TRACKER.track(THIN);
+      await TRACKER.flush();
+      const lines = files[name].trim().split('\n');
+      const ids = lines.map(l => JSON.parse(l).id);
+      return {before, adopted, mineAfter, after: lines.length,
+              uniqueIds: new Set(ids).size === ids.length,
+              rowsVisible: Object.keys(TRACKER.state).length};
+    })();
+  }, [M_FAT, M_THIN, M_APEX]);
+
   /* ---- 5. two people, two files, no overwrite ----
      Events from two devices fold into one state, and the later timestamp
      wins the field without erasing the earlier event from the log. */
@@ -253,6 +288,13 @@ const base = o => Object.assign(
        'the dropdown must re-render showing the chosen action');
   want(R.liveAfterSync.teamRowKept, 'a local edit must not drop the team row');
   want(R.liveAfterSync.buckets.length >= 1, 'tracker rows must show the bucket');
+
+  want(R.reclaim.before === 4, 'expected 4 events written, got ' + R.reclaim.before);
+  want(R.reclaim.adopted === 4, 'sync must reclaim this device\'s own events, adopted ' + R.reclaim.adopted);
+  want(R.reclaim.after > R.reclaim.before,
+       'the file must grow, not truncate: ' + R.reclaim.before + ' -> ' + R.reclaim.after);
+  want(R.reclaim.uniqueIds, 'reclaimed events must not collide with newly issued ids');
+  want(R.reclaim.rowsVisible === 3, 'all three tracked MIDs should survive the reclaim');
 
   want(R.merge.action === 'MC Fix (Descriptor Lookup)', 'the later action should win the merge');
   want(R.merge.status === 'done', 'the later status should win the merge');

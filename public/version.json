@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.01",
+  "version": "2026.09.02",
   "model": "m1.0",
-  "notes": "Fixes the tracker not updating until reload once a folder is connected, and shows each deal's bucket."
+  "notes": "Your tracker file can no longer be truncated if the browser clears its storage \u2014 the folder copy is reclaimed on sync."
 }
