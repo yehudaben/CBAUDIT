@@ -12,3 +12,6 @@ _to_delete/
 fixtures/*.csv
 fixtures/*.json
 !fixtures/.gitkeep
+
+# never let a test fixture reach the deployed folder again
+public/*.csv
