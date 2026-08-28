@@ -81,6 +81,30 @@ exists, create a **new** project via *Connect to Git* and delete the old one.
 
 ---
 
+## The monthly reset
+
+The portal zeroes every counter on the 1st, so every figure in a report is
+**month-to-date** — not daily, not lifetime. The console is built around that:
+
+- The headline names the month and how far into it you are.
+- Trend deltas are computed **inside a month only**. Comparing across the 1st
+  would read the reset itself as a large improvement.
+- Sparklines are cut at each month boundary. A **Per day** toggle divides each
+  month-to-date total by the day of the month if you want a line that runs
+  straight through; CB % is already a rate and is unchanged by it.
+- **Versus last month** compares current month-to-date against the prior
+  month's *final* report. Read the CB % columns there, not the counts — a
+  part-finished month naturally has fewer of everything.
+- Rows under `MODEL.thinSales` month-to-date sales (default 250) carry a
+  **thin** marker. They still score and still rank; the marker only says the
+  rate sits on a small denominator. 250 is where the model's own numbers meet:
+  5 chargebacks — the fewest that can trip F5 — on 250 sales is exactly the 2%
+  ceiling. The floor is adjustable in Settings.
+
+The 21-column audit export is unchanged.
+
+---
+
 ## What is not shared between users
 
 Each person's data is theirs alone and lives on their own computer:

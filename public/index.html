@@ -120,7 +120,15 @@ h1{font-size:var(--fs-h1);margin:4px 0 0;letter-spacing:-.02em;font-weight:700}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.sm{padding:calc(4px*var(--d)) calc(9px*var(--d));font-size:var(--fs-xs)}
 
+/* ---- thin month-to-date marker ---- */
+.thinb{display:inline-block;font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;
+  color:var(--ink);background:rgba(250,178,25,.18);border:1px solid var(--warn);
+  border-radius:var(--r-pill);padding:0 calc(7px*var(--d));margin-left:5px;
+  white-space:nowrap;cursor:help;vertical-align:1px}
+
 /* ---- build stamp + update banner ---- */
+.headline .mtd{font-weight:700;color:var(--ink2)}
+.headline .mtdnote{font-size:var(--fs-sm);color:var(--ink2)}
 .vchip{display:inline-block;margin-left:calc(9px*var(--d));font-size:var(--fs-xs);
   font-weight:700;letter-spacing:.06em;color:var(--muted);border:1px solid var(--grid);
   border-radius:var(--r-pill);padding:1px calc(8px*var(--d));vertical-align:4px;
@@ -711,7 +719,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.08.28";
+const APP_VERSION   = "2026.08.29";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -769,6 +777,7 @@ const MODEL = {
   f3Mc:   5,    f3Rfnd: 10,
   f4Brand:5,
   f5Cbp:  2,    f5Cb: 5,
+  thinSales: 250,
   bonHi:  5,    bonHiPts: 6,
   bonMid: 3,    bonMidPts: 3,
   tierCrit: 16, tierHigh: 10
@@ -1135,6 +1144,10 @@ function score(r){
   const cov = (r.rn+r.vi)>0 ? r.rn/(r.rn+r.vi)*100 : null;
   const mcs = r.cb>0 ? r.mc/r.cb*100 : null;
   const zs  = (r.s===0 && r.cb>0);
+  /* month-to-date sales too small for a rate to mean much yet. Does NOT
+     change flags or weight — it only marks the row so nobody chases a
+     merchant that merely looks bad because it is the 3rd of the month. */
+  const thin = (r.s>0 && r.s < M.thinSales);
   const bad = (cbp!==null && cbp>100);
   const F=[];
   if(r.vi>=M.f1Visa && (r.rn===0 || (cov!==null && cov<M.f1Cov))) F.push("F1");
@@ -1149,7 +1162,7 @@ function score(r){
   }
   const w = bad ? base : base+bon;
   let pri=""; for(const s of SEVERITY){ if(F.indexOf(s)>=0){pri=s;break;} }
-  return Object.assign({}, r, {cbp,rfp,cov,mcs,zs,bad,F,nf:F.length,bon,w,pri});
+  return Object.assign({}, r, {cbp,rfp,cov,mcs,zs,thin,bad,F,nf:F.length,bon,w,pri});
 }
 function tierOf(e){
   if(e.bad) return "QUARANTINE";
@@ -1476,6 +1489,48 @@ function niceStamp(s){
   return {short:`${d} ${M[mo-1]}`, time:t, full:`${d} ${M[mo-1]} ${y} ${t}`};
 }
 
+/* ============================================================
+   MONTHLY RESET
+
+   The portal zeroes every counter on the 1st. So each report is a
+   month-to-date figure, not a running total and not a daily one.
+   Three consequences the rest of the code has to respect:
+
+     • A trend line drawn across the 1st shows a cliff that is not an
+       improvement. Series are segmented by month and no delta is ever
+       computed across the boundary.
+     • Early in a month the denominators are tiny, so CB % swings
+       wildly. Rows below MODEL.thinSales carry a "thin" marker.
+     • "Versus last month" means the prior month's FINAL figures — the
+       last report filed before the reset.
+   ============================================================ */
+const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun",
+                    "Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function periodOf(stamp){
+  return (stamp && /^\d{4}-\d{2}/.test(stamp)) ? stamp.slice(0,7) : null;
+}
+function periodLabel(p){
+  if(!p) return "undated";
+  return MONTH_ABBR[+p.slice(5,7)-1] + " " + p.slice(0,4);
+}
+function dayOfMonth(stamp){
+  return (stamp && /^\d{4}-\d{2}-\d{2}/.test(stamp)) ? +stamp.slice(8,10) : null;
+}
+function daysInMonth(p){
+  if(!p) return 30;
+  return new Date(+p.slice(0,4), +p.slice(5,7), 0).getDate();
+}
+/* distinct periods present in the library, oldest first */
+function periodsInLib(){
+  const seen=[];
+  allSnapshotsChrono().forEach(s=>{
+    const p=periodOf(s.stamp);
+    if(p && seen.indexOf(p)<0) seen.push(p);
+  });
+  return seen;
+}
+
 function addSnapshot(snap){
   const stamp = snap.stamp || null;
   const id = (stamp || snap.name || "snap") + "|" + snap.rows.length;
@@ -1515,9 +1570,20 @@ function sparkSVG(vals, opts){
   const min=Math.min(...nums), max=Math.max(...nums);
   const span = (max-min)||1;
   const n=clean.length;
-  const pts=[];
-  clean.forEach((v,i)=>{ if(v!=null) pts.push([(i/(n-1))*96+2, 34-((v-min)/span)*30]); });
-  const path = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  /* o.breaks holds indices that start a new month. The line is cut there
+     rather than bridged, so a reset never looks like a fall. */
+  const brk = o.breaks || {};
+  const pts=[]; const segs=[]; let cur=[];
+  clean.forEach((v,i)=>{
+    if(brk[i] && cur.length){ segs.push(cur); cur=[]; }
+    if(v!=null){
+      const p=[(i/(n-1))*96+2, 34-((v-min)/span)*30];
+      pts.push(p); cur.push(p);
+    }
+  });
+  if(cur.length) segs.push(cur);
+  const path = segs.map(sg=>sg.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1))
+    .join(" ")).join(" ");
   const last = pts[pts.length-1];
   const col = o.color || "var(--accent)";
   const thr = o.threshold;
@@ -1903,6 +1969,8 @@ function historyAt(level){
   if(_HL[level] && _HL[level].sig===sig) return _HL[level].data;
   const snaps = allSnapshotsChrono();
   const stamps = snaps.map(s=>s.stamp||s.name);
+  const periods = snaps.map(s=>periodOf(s.stamp));
+  const days    = snaps.map(s=>dayOfMonth(s.stamp));
   const map = new Map();
   snaps.forEach((s,si)=>{
     const groups = new Map();
@@ -1935,22 +2003,39 @@ function historyAt(level){
       rec.bset = [...new Set(rec.bset.concat([...g.bset]))];
       rec.pts[si] = {s:agg.s, ds:agg.ds, cb:agg.cb, cv:agg.cv, cbp:agg.cbp, rfp:agg.rfp,
                      cov:agg.cov, w:agg.w, tier:tierOf(agg),
-                     f5:agg.F.indexOf("F5")>=0, zs:agg.zs, nf:agg.nf,
+                     f5:agg.F.indexOf("F5")>=0, zs:agg.zs, nf:agg.nf, thin:agg.thin,
+                     period:periods[si], day:days[si],
                      nmids:g.n, over:g.over, flagged:g.flagged};
     });
   });
   const rows=[];
   map.forEach(rec=>{
-    const seen = rec.pts.filter(Boolean);
-    if(!seen.length) return;
-    const first=seen[0], last=seen[seen.length-1];
-    rec.n = seen.length; rec.first=first; rec.last=last;
+    /* Deltas are computed inside the current month only. The portal zeroes
+       every counter on the 1st, so measuring the newest report against one
+       filed before the reset would read the reset itself as an improvement. */
+    const idx=[]; rec.pts.forEach((p,i)=>{ if(p) idx.push(i); });
+    if(!idx.length) return;
+    const lastI = idx[idx.length-1];
+    const curP  = periods[lastI];
+    const segIdx = curP ? idx.filter(i=>periods[i]===curP) : idx;
+    const useIdx = segIdx.length ? segIdx : idx;
+    const seen    = idx.map(i=>rec.pts[i]);
+    const segSeen = useIdx.map(i=>rec.pts[i]);
+    const first = segSeen[0], last = segSeen[segSeen.length-1];
+    rec.period = curP;
+    rec.n = segSeen.length;      // points inside the current month
+    rec.nAll = seen.length;      // points across the whole library
+    rec.first=first; rec.last=last; rec.allFirst=seen[0];
     rec.everFlagged = seen.some(p=>p.nf>0 || p.flagged>0);
     rec.everCB = seen.some(p=>p.cb>0);
     rec.dcb  = last.cb - first.cb;
     rec.dsal = last.s - first.s;
     rec.dcbp = (last.cbp!=null && first.cbp!=null) ? last.cbp - first.cbp : null;
     rec.dover = last.over - first.over;
+    /* the prior month's FINAL figures — the last report filed before the reset */
+    const prevIdx = curP ? idx.filter(i=>periods[i] && periods[i] < curP) : [];
+    rec.prev       = prevIdx.length ? rec.pts[prevIdx[prevIdx.length-1]] : null;
+    rec.prevPeriod = prevIdx.length ? periods[prevIdx[prevIdx.length-1]] : null;
     if(rec.n===1){
       /* one report means no trend to read; label the point in time honestly
          rather than implying movement that has not been observed */
@@ -1983,7 +2068,7 @@ function historyAt(level){
     }
     rows.push(rec);
   });
-  _HL[level] = {sig, data:{stamps, rows}};
+  _HL[level] = {sig, data:{stamps, periods, days, rows}};
   return _HL[level].data;
 }
 function invalidateHL(){ _HL = {}; }
@@ -1996,7 +2081,8 @@ function invalidateHL(){ _HL = {}; }
    library composition plus the scoring model, because changing a
    threshold has to invalidate it.
    ============================================================ */
-let MT = {level:"mid", scope:"flagged", sort:"dcbp", dir:-1, q:"", limit:250, sel:null};
+let MT = {level:"mid", scope:"flagged", sort:"dcbp", dir:-1, q:"", limit:250, sel:null,
+          norm:false};   // norm = show per-day rates instead of month-to-date totals
 function midHistory(){ return historyAt(MT.level); }
 
 function miniSpark(vals, color, threshold){
@@ -2004,9 +2090,18 @@ function miniSpark(vals, color, threshold){
   const nums = clean.filter(v=>v!=null);
   if(nums.length<2) return `<svg viewBox="0 0 100 30" preserveAspectRatio="none"></svg>`;
   const min=Math.min(...nums), max=Math.max(...nums), span=(max-min)||1, n=clean.length;
-  const pts=[];
-  clean.forEach((v,i)=>{ if(v!=null) pts.push([(i/(n-1))*96+2, 26-((v-min)/span)*22]); });
-  const path = pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const brk = miniSpark.breaks || {};
+  const pts=[]; const segs=[]; let cur=[];
+  clean.forEach((v,i)=>{
+    if(brk[i] && cur.length){ segs.push(cur); cur=[]; }
+    if(v!=null){
+      const p=[(i/(n-1))*96+2, 26-((v-min)/span)*22];
+      pts.push(p); cur.push(p);
+    }
+  });
+  if(cur.length) segs.push(cur);
+  const path = segs.map(sg=>sg.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1))
+    .join(" ")).join(" ");
   const last = pts[pts.length-1];
   let thr="";
   if(threshold!=null && threshold>=min && threshold<=max){
@@ -2082,6 +2177,19 @@ function trendsPageHTML(){
   const nRep = H.stamps.length;
   const {all, shown} = mtRows();
   const isMid = MT.level==="mid";
+
+  /* Where a new month starts, the counters were zeroed. In month-to-date view
+     the sparklines are cut there so a reset never draws as a fall. In per-day
+     view the values are already rates, so the line runs straight through. */
+  const P = H.periods || [];
+  const BRK = {};
+  P.forEach((p,i)=>{ if(i>0 && p && P[i-1] && p!==P[i-1]) BRK[i]=1; });
+  const nPeriods = [...new Set(P.filter(Boolean))].length;
+  const nrm = !!MT.norm;
+  miniSpark.breaks = nrm ? {} : BRK;
+  /* month-to-date total ÷ day-of-month = the average day so far */
+  const perDay = (v,p)=> (v==null||!p||!p.day) ? v : v/p.day;
+  const val = (p,f)=> !p ? null : (nrm ? perDay(p[f],p) : p[f]);
   const counts = (()=>{ const c={bad:0,new:0,fix:0,warn:0,mut:0};
     H.rows.forEach(r=>c[r.status[1]]++); return c; })();
   const scopeOpts = isMid
@@ -2121,7 +2229,9 @@ function trendsPageHTML(){
       <button class="cp" data-copy="midtrend">Copy</button>
       <button class="cp" data-copy="midmatrix">Copy CB % matrix</button></h2>
     <p class="lede">One line per ${MT.level==="bucket"?"bucket":MT.level==="merch"?"merchant":"MID"},
-      ${nRep<2?"showing current values from the single loaded report":"oldest report to newest"}. ${isMid
+      ${nRep<2?"showing current values from the single loaded report"
+        :(nPeriods>1?"across the current month only — earlier months are shown in Versus last month below"
+                    :"oldest report to newest")}. ${isMid
         ? `Status judges movement against the ${MODEL.f5Cbp}% ceiling — the threshold the card brands
            act on — so <em>Back under ceiling</em> means the problem genuinely closed.`
         : `A group's CB % is its pooled rate (total chargebacks ÷ total sales), not an average of its
@@ -2139,6 +2249,13 @@ function trendsPageHTML(){
       <label>Level</label>
       <span class="seg">${LEVELS.map(([v,l])=>
         `<button data-lvl="${v}" class="${MT.level===v?"on":""}">${l}</button>`).join("")}</span>
+      <label>Figures</label>
+      <span class="seg">
+        <button data-norm="0" class="${!nrm?"on":""}"
+          title="Raw month-to-date counters, cut at each month reset">Month to date</button>
+        <button data-norm="1" class="${nrm?"on":""}"
+          title="Month-to-date divided by day of month — comparable across the reset">Per day</button>
+      </span>
       <label for="mtScope">Show</label>
       <select id="mtScope">${scopeOpts.map(([v,l])=>
         `<option value="${v}"${MT.scope===v?" selected":""}>${l}</option>`).join("")}</select>
@@ -2162,8 +2279,14 @@ function trendsPageHTML(){
       <th class="na">CB %</th><th class="n na">Δ</th>
       ${isMid?'<th class="na">Bucket</th>':""}</tr></thead><tbody>
       ${shown.map(r=>{
-        const sal=r.pts.map(p=>p?p.s:null), cbs=r.pts.map(p=>p?p.cb:null),
+        const sal=r.pts.map(p=>val(p,"s")), cbs=r.pts.map(p=>val(p,"cb")),
               cbp=r.pts.map(p=>p?p.cbp:null), ovr=r.pts.map(p=>p?p.over:null);
+        /* CB % is already a rate, so it is untouched by the per-day view */
+        const lS=val(r.last,"s"),  fS=val(r.first,"s");
+        const lC=val(r.last,"cb"), fC=val(r.first,"cb");
+        const dS = (lS!=null&&fS!=null) ? lS-fS : null;
+        const dC = (lC!=null&&fC!=null) ? lC-fC : null;
+        const dpN = nrm ? 2 : 0;
         const who = isMid
           ? `<span class="nm">${esc(r.m)}</span><br><span class="dba">${esc(r.d)}</span>
              <span class="mid">${esc(r.id)}</span>`
@@ -2179,11 +2302,11 @@ function trendsPageHTML(){
             <span class="v">${r.last.over}<small>${r.n<2?"&nbsp;":"from "+r.first.over}</small></span></span></td>
             <td class="n">${dNum(r.dover,0,false,r.n<2)}</td>`}
           <td><span class="mini">${miniSpark(sal,"var(--accent)")}
-            <span class="v">${fmtN(r.last.s)}<small>${r.n<2?"&nbsp;":"from "+fmtN(r.first.s)}</small></span></span></td>
-          <td class="n">${dNum(r.dsal,0,true,r.n<2)}</td>
+            <span class="v">${nrm?lS.toLocaleString("en-US",{maximumFractionDigits:1}):fmtN(r.last.s)}<small>${r.n<2?"&nbsp;":"from "+(nrm?fS.toLocaleString("en-US",{maximumFractionDigits:1}):fmtN(r.first.s))}</small></span></span></td>
+          <td class="n">${dNum(dS,dpN,true,r.n<2)}</td>
           <td><span class="mini">${miniSpark(cbs,"var(--crit)")}
-            <span class="v">${r.last.cb}<small>${r.n<2?"&nbsp;":"from "+r.first.cb}</small></span></span></td>
-          <td class="n">${dNum(r.dcb,0,false,r.n<2)}</td>
+            <span class="v">${nrm?lC.toFixed(2):r.last.cb}<small>${r.n<2?"&nbsp;":"from "+(nrm?fC.toFixed(2):r.first.cb)}</small></span></span></td>
+          <td class="n">${dNum(dC,dpN,false,r.n<2)}</td>
           <td><span class="mini">${miniSpark(cbp,"var(--serious)",MODEL.f5Cbp)}
             <span class="v">${r.last.cbp==null?"—":r.last.cbp.toFixed(2)+"%"}
               <small>${r.n<2?"&nbsp;":(r.first.cbp==null?"—":"from "+r.first.cbp.toFixed(2)+"%")}</small></span></span></td>
@@ -2192,13 +2315,18 @@ function trendsPageHTML(){
         </tr>`;
       }).join("")}
     </tbody></table></div>
-    <p class="note">Δ compares the newest report with the oldest one containing that row, so
-      something that only appears recently is measured over its own span — Rep says how many points
-      back it. Red means the number moved the wrong way for risk: rising chargebacks, rising rate,
+    <p class="note">Portal counters reset to zero on the 1st, so every figure is month-to-date and
+      Δ compares only within ${nPeriods>1?"the current month":"the loaded month"} — never across a
+      reset, which would read as a large improvement that never happened. Rep counts the reports
+      inside that month. ${nrm
+        ? "Per-day view divides each month-to-date total by the day of the month, so the line runs "
+          + "straight through the reset; CB % is already a rate and is unchanged by it."
+        : "Month-to-date view cuts each sparkline at the reset."}
+      Red means the number moved the wrong way for risk: rising chargebacks, rising rate,
       or falling volume.${all.length>shown.length
       ? ` Only the first ${shown.length} rows are drawn to keep the page responsive; the Copy buttons
         export all ${all.length}.` : ""}</p>
-    ${detailCardHTML()}`;
+    ${detailCardHTML()}` + momHTML(H, shown, isMid);
 }
 
 /* ---------- drill-down detail, works at every level ---------- */
@@ -2344,6 +2472,15 @@ function modelPanelHTML(A){
         no bonus at all — bad data must not outrank real damage.</span></div>
     </div>
     <div class="setblock">
+      <h4>Thin-data marker <span class="out">— marks rows, never hides or rescores them</span></h4>
+      <div class="setrow">Mark a row <span class="thinb">thin</span> below
+        ${numIn("thinSales",M.thinSales,25,90)} sales month-to-date</div>
+      <div class="setrow"><span class="out">The default of 250 is where the model's own numbers meet:
+        ${M.f5Cb} chargebacks &mdash; the fewest that can trip F5 &mdash; on ${M.f5Cb/(M.f5Cbp/100)}
+        sales already sits exactly on the ${M.f5Cbp}% ceiling. Below that, a single dispute can carry
+        a merchant past it.</span></div>
+    </div>
+    <div class="setblock">
       <h4>Tier cutoffs</h4>
       <div class="setrow"><span class="badge"><span class="dot d-c"></span>Act today</span>
         at weighted ${numIn("tierCrit",M.tierCrit,1)} and above</div>
@@ -2364,7 +2501,7 @@ function modelPanelHTML(A){
 const MODEL_DEFAULTS = JSON.parse(JSON.stringify({
   w:{F1:4,F2:1,F3:3,F4:2,F5:10},
   f1Visa:5, f1Cov:50, f2Visa:3, f3Mc:5, f3Rfnd:10, f4Brand:5,
-  f5Cbp:2, f5Cb:5, bonHi:5, bonHiPts:6, bonMid:3, bonMidPts:3,
+  f5Cbp:2, f5Cb:5, thinSales:250, bonHi:5, bonHiPts:6, bonMid:3, bonMidPts:3,
   tierCrit:16, tierHigh:10
 }));
 function settingsPageHTML(A){
@@ -2390,12 +2527,71 @@ function viewTabsHTML(){
       : "Scoring, appearance and export layout"}</span>
   </div>`;
 }
+/* ============================================================
+   MONTH OVER MONTH — current month-to-date against the prior
+   month's FINAL figures, which is the last report filed before the
+   counters were zeroed.
+
+   Counts are not like-for-like: a part-finished month is being held
+   up against a complete one. Rates are, so CB % leads and the counts
+   sit beside it clearly marked.
+   ============================================================ */
+function momHTML(H, shown, isMid){
+  const rows = shown.filter(r=>r.prev && r.last);
+  if(!rows.length) return "";
+  const curP  = rows[0].period, prevP = rows[0].prevPeriod;
+  const day   = rows[0].last.day;
+  const dim   = daysInMonth(curP);
+  const pct   = (day && dim) ? Math.round(day/dim*100) : null;
+
+  const body = rows.map(r=>{
+    const a=r.prev, b=r.last;
+    const dcbp = (a.cbp!=null && b.cbp!=null) ? b.cbp-a.cbp : null;
+    const who = isMid
+      ? `<span class="nm">${esc(r.m)}</span><br><span class="dba">${esc(r.d)}</span>`
+      : `<span class="nm">${esc(r.key)}</span>`;
+    return `<tr>
+      <td class="who">${who}</td>
+      <td class="n">${a.cbp==null?"—":a.cbp.toFixed(2)+"%"}</td>
+      <td class="n">${b.cbp==null?"—":b.cbp.toFixed(2)+"%"}</td>
+      <td class="n">${dNum(dcbp,2,false,false)}</td>
+      <td class="n">${fmtN(a.cb)}</td>
+      <td class="n">${fmtN(b.cb)}</td>
+      <td class="n">${fmtN(a.s)}</td>
+      <td class="n">${fmtN(b.s)}</td>
+    </tr>`;
+  }).join("");
+
+  return `<h2 id="s-mom">Versus last month
+      <span class="n">${periodLabel(curP)} so far vs ${periodLabel(prevP)} final</span>
+      <button class="cp" data-copy="mom">Copy</button></h2>
+    <p class="lede">Each row's current month-to-date figures against the last report filed in
+      ${esc(periodLabel(prevP))} — that month's finished totals.
+      <strong>Read the CB % columns, not the counts.</strong>
+      ${pct!=null?`${periodLabel(curP)} is about ${pct}% elapsed (day ${day} of ${dim}), so its
+      counts are naturally lower and a fall in CB # means nothing on its own.`
+      :"The current month is incomplete, so its counts are naturally lower."}
+      A rate that is up on last month's finished rate is a real deterioration.</p>
+    <div class="scroll"><table><thead><tr>
+      <th class="na">${isMid?"MID":MT.level==="merch"?"Merchant":"Bucket"}</th>
+      <th class="n na">CB % ${esc(periodLabel(prevP))} final</th>
+      <th class="n na">CB % now</th><th class="n na">Δ rate</th>
+      <th class="n na">CB # final</th><th class="n na">CB # now</th>
+      <th class="n na">Sales final</th><th class="n na">Sales now</th>
+    </tr></thead><tbody>${body}</tbody></table></div>
+    <p class="note">Only rows present in both months appear here. A merchant that started this month
+      has no prior final to compare against.</p>`;
+}
+
 function wireViews(){
   document.querySelectorAll("[data-view]").forEach(b=>{
     b.onclick=()=>{ VIEW.page=b.getAttribute("data-view"); window.scrollTo(0,0); render(); };
   });
   document.querySelectorAll("[data-lvl]").forEach(b=>{
     b.onclick=()=>{ MT.level=b.getAttribute("data-lvl"); MT.sel=null; render(); };
+  });
+  document.querySelectorAll("[data-norm]").forEach(b=>{
+    b.onclick=()=>{ MT.norm = b.getAttribute("data-norm")==="1"; render(); };
   });
   document.querySelectorAll("table.mt tbody tr[data-row]").forEach(tr=>{
     tr.onclick=()=>{
@@ -2448,6 +2644,12 @@ function portfolioTrendHTML(){
   if(LIB.length<1) return "";
   const ser = portfolioSeries();
   const last = ser[ser.length-1], prev = ser.length>1 ? ser[ser.length-2] : null;
+  /* the counters were zeroed between any two reports in different months, so a
+     delta across that boundary is the reset, not a change in behaviour */
+  const sp   = ser.map(x=>periodOf(x.snap.stamp));
+  const brk  = {}; sp.forEach((p,i)=>{ if(i>0 && p && sp[i-1] && p!==sp[i-1]) brk[i]=1; });
+  const nPer = [...new Set(sp.filter(Boolean))].length;
+  const sameMonth = !!(prev && sp[ser.length-1] && sp[ser.length-1]===sp[ser.length-2]);
   const met = [
     {lab:"Act today", get:x=>x.A.crit.length, dp:0},
     {lab:"Flagged", get:x=>x.A.ranked.length+x.A.quar.length, dp:0},
@@ -2463,8 +2665,10 @@ function portfolioTrendHTML(){
     const shown = cur==null ? "n/a"
       : (m.dp ? cur.toFixed(m.dp)+"%" : Number(cur).toLocaleString("en-US"));
     return `<div class="spark"><div class="lab">${esc(m.lab)}</div>
-      <div class="now">${shown}</div>${deltaTag(cur,pv,false)}
-      ${sparkSVG(vals)}</div>`;
+      <div class="now">${shown}</div>${sameMonth
+        ? deltaTag(cur,pv,false)
+        : `<span class="dlt flat" title="The previous report is from another month, and the portal zeroed every counter in between">new month</span>`}
+      ${sparkSVG(vals,{breaks:brk})}</div>`;
   }).join("");
   return `<h2 id="s-trend">Portfolio trend
       <span class="n">${ser.length} report${ser.length===1?"":"s"}</span>
@@ -2474,10 +2678,13 @@ function portfolioTrendHTML(){
       : `Spanning ${esc(niceStamp(ser[0].snap.stamp)?niceStamp(ser[0].snap.stamp).full:ser[0].snap.name)}
          to ${esc(niceStamp(last.snap.stamp)?niceStamp(last.snap.stamp).full:last.snap.name)}.`}
       Portfolio CB % is total chargebacks over total sales, so it is dominated by the largest
-      merchants and moves far less than any single MID.</p>
+      merchants and moves far less than any single MID.${nPer>1
+        ? ` Counters reset on the 1st, so the lines are cut at each month boundary and the change
+           shown is against the previous report <em>within the same month</em>.`
+        : ""}</p>
     <div class="trend">${cards}</div>
     <div class="scroll"><table><thead><tr>
-      <th class="na">Report</th><th class="n na">MIDs</th><th class="n na">Act today</th>
+      <th class="na">Report</th><th class="na">Month</th><th class="n na">MIDs</th><th class="n na">Act today</th>
       <th class="n na">High</th><th class="n na">Monitor</th><th class="n na">Integrity</th>
       <th class="n na">Flagged</th><th class="n na">CB total</th><th class="n na">Portfolio CB %</th>
       </tr></thead><tbody>
@@ -2485,6 +2692,7 @@ function portfolioTrendHTML(){
         const n=niceStamp(x.snap.stamp);
         const tot=x.A.E.reduce((a,e)=>a+e.s,0), cb=x.A.E.reduce((a,e)=>a+e.cb,0);
         return `<tr><td>${n?esc(n.full):esc(x.snap.name)}</td>
+          <td>${esc(periodLabel(periodOf(x.snap.stamp)))}</td>
           <td class="n">${x.A.total}</td>
           <td class="n"><strong>${x.A.crit.length}</strong></td>
           <td class="n">${x.A.high.length}</td><td class="n">${x.A.mon.length}</td>
@@ -2550,6 +2758,15 @@ document.addEventListener("keydown",e=>{
 
 
 /* ---------- rendering ---------- */
+/* A rate built on very few month-to-date sales is not yet worth acting on.
+   The row still scores and still ranks — it is only marked, so the judgement
+   stays with the reader rather than being made for them by a filter. */
+function thinTag(e){
+  if(!e || !e.thin) return "";
+  return `<span class="thinb" title="Only ${fmtN(e.s)} sales month-to-date, below the `
+    + `${fmtN(MODEL.thinSales)} floor. One more chargeback moves this rate a long way, so treat it `
+    + `as provisional until the month fills in.">thin</span>`;
+}
 function cardHTML(e, cls){
   const pills = e.F.map(f=>`<span class="pill">${f}</span>`).join("");
   const cbpTxt = e.cbp===null ? "<b>no sales — data integrity flag</b>" : `<b>${e.cbp.toFixed(2)}%</b>`;
@@ -2562,7 +2779,7 @@ function cardHTML(e, cls){
     <div class="r2"><span class="sc">Weighted ${e.w}</span> · ${pills} ·
       Primary: ${esc(PRIMARY_LABEL[e.pri]||"—")} · ${esc(e.b)}</div>
     <div class="figs">
-      CB <b>${e.cb}</b> / ${fmtN(e.s)} sales = ${cbpTxt} &nbsp;·&nbsp;
+      CB <b>${e.cb}</b> / ${fmtN(e.s)} sales = ${cbpTxt}${thinTag(e)} &nbsp;·&nbsp;
       CB volume ${fmtM(e.cv)} &nbsp;·&nbsp; Refunds ${fmtP(e.rfp)} (${fmtM(e.dr)} on ${fmtM(e.ds)})<br>
       Visa <b>${e.vi}</b>, RDR ${e.rn} (${covTxt}) &nbsp;·&nbsp; MC <b>${e.mc}</b>
       &nbsp;·&nbsp; Amex <b>${e.ax}</b> &nbsp;·&nbsp; Disc <b>${e.dc}</b>
@@ -2607,6 +2824,9 @@ function finishRender(P, A, V){
     <strong>Source.</strong> ${esc(SNAP_A.name)} — ${esc(stampA)} — ${A.total} MIDs,
     exported from portal.paymenthelp.ai/report/.
     ${SNAP_B?`Compared against ${esc(SNAP_B.name)} (${esc(SNAP_B.stamp||"no timestamp")}).`:""}<br>
+    <strong>Period.</strong> Portal counters reset to zero on the 1st, so every figure here is
+    month-to-date, not daily and not lifetime. Trends compare only within a month, and
+    “versus last month” uses the prior month’s final report.<br>
     <strong>Method.</strong> CB % = CB # ÷ # Sales (count-based). Refund % = $ Refunds ÷ $ Sales.
     RDR coverage = # RDR ÷ (# RDR + Visa CB). MC share = MC CB ÷ total CB.
     Percentages to one decimal, CB % to two, counts whole.<br>
@@ -2655,13 +2875,21 @@ function render(){
 
   /* headline + tiles */
   const flagged = A.ranked.length + A.quar.length;
+  const _p   = periodOf(SNAP_A.stamp);
+  const _day = dayOfMonth(SNAP_A.stamp);
+  const _dim = daysInMonth(_p);
+  const _thin= A.E.filter(e=>e.thin).length;
   add(`<div class="headline">
+    ${_p?`<span class="mtd">${esc(periodLabel(_p))} month-to-date${_day?` — day ${_day} of ${_dim}`:""}.</span> `:""}
     <strong>${flagged} MIDs flagged</strong> of ${A.total} reviewed ·
     <strong>${A.crit.length} act today</strong> ${worst ? `· worst is
     <strong>${esc(worst.m)} — ${esc(worst.d)}</strong> at weighted ${worst.w},
     ${worst.cbp!==null?worst.cbp.toFixed(2)+"% CB":"no sales"}` : ""}.
     A further <strong>${A.integ.length} MIDs post chargebacks against zero sales</strong>
-    and sit outside the scoring model by design.
+    and sit outside the scoring model by design.${_thin?`
+    <br><span class="mtdnote">${_thin} MID${_thin===1?" has":"s have"} under
+    ${fmtN(MODEL.thinSales)} sales so far this month and ${_thin===1?"is":"are"} marked
+    <span class="thinb">thin</span> — still ranked, but the rate sits on a small denominator.</span>`:""}
   </div>`);
   add(`<div class="tiles">
     <div class="tile"><div class="lab">MIDs reviewed</div><div class="val">${A.total}</div>
@@ -2713,7 +2941,7 @@ function render(){
       <td>${esc(e.m)}<div class="mono">${esc(e.id)}</div></td>
       <td>${esc(e.d)}</td><td>${esc(e.b)}</td>
       <td class="n"><strong>${e.w}</strong></td><td class="n">${e.cb}</td>
-      <td class="n">${e.cbp===null?"n/a":e.cbp.toFixed(2)+"%"}</td>
+      <td class="n">${e.cbp===null?"n/a":e.cbp.toFixed(2)+"%"}${thinTag(e)}</td>
       <td class="n">${fmtP(e.rfp)}</td><td class="n">${e.vi}</td><td class="n">${e.rn}</td>
       <td>${e.F.map(f=>`<span class="pill">${f}</span>`).join("")}</td>
       <td>${esc(PRIMARY_LABEL[e.pri]||"")}</td></tr>`).join("")
@@ -2730,7 +2958,7 @@ function render(){
   add(fMon.length ? `<ul class="flat">${sortRows(fMon).map(e=>`<li>
       <span class="nm">${esc(e.m)}</span><span class="dba">— ${esc(e.d)}</span>
       <span class="pill">${e.pri}</span>
-      <span class="tr">${esc(triggerFor(e))}</span></li>`).join("")}</ul>`
+      <span class="tr">${esc(triggerFor(e))}</span>${thinTag(e)}</li>`).join("")}</ul>`
     : '<p class="note">No MIDs in this tier.</p>');
 
   /* quarantine */
@@ -2986,22 +3214,49 @@ function exportSet(which){
             ["Inert",A.inert],["Total MIDs reviewed",A.total]]
         .map(r=>[r[0], intN(r[1])])};
   }
+  if(which==="mom"){
+    const {shown} = mtRows();
+    const rows = shown.filter(r=>r.prev && r.last);
+    const curP = rows.length?rows[0].period:null, prevP = rows.length?rows[0].prevPeriod:null;
+    return {label:"Versus last month", cols:null, sepAfter:[],
+      head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
+            "Merchant","DBA","Bucket",
+            "CB % "+periodLabel(prevP)+" final","CB % "+periodLabel(curP)+" to date",
+            "\u0394 CB % (pp)",
+            "CB # final","CB # to date","Sales final","Sales to date",
+            "$ Sales final","$ Sales to date"],
+      rows:rows.map(r=>{
+        const a=r.prev, b=r.last;
+        const d=(a.cbp!=null&&b.cbp!=null)?b.cbp-a.cbp:null;
+        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b,
+          a.cbp==null?"no sales":pctN(a.cbp,2),
+          b.cbp==null?"no sales":pctN(b.cbp,2),
+          d==null?"":(d>0?"+":"")+d.toFixed(2),
+          intN(a.cb), intN(b.cb), intN(a.s), intN(b.s),
+          money2(a.ds), money2(b.ds)];
+      })};
+  }
   if(which==="midtrend"){
     const {all} = mtRows();
     return {label:"MID trends", cols:null, sepAfter:[],
       head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
-            "Merchant","DBA","Bucket","Reports","Status",
-            "First report","Last report",
+            "Merchant","DBA","Bucket","Month","Reports in month","Status",
+            "First in month","Latest report",
             "Volume first","Volume last","Δ Volume",
             "CB # first","CB # last","Δ CB #",
             "CB % first","CB % last","Δ CB % (pp)",
             "Weighted last","Tier last"],
       rows:all.map(r=>{
         const H=historyAt(MT.level);
-        const fi=r.pts.findIndex(Boolean);
-        let li=-1; r.pts.forEach((p,i)=>{ if(p) li=i; });
+        /* first/last of the CURRENT MONTH, matching the values printed below —
+           the overall first would date a July row against an August figure */
+        let fi=-1, li=-1;
+        r.pts.forEach((p,i)=>{
+          if(p && (!r.period || p.period===r.period)){ if(fi<0) fi=i; li=i; }
+        });
+        if(fi<0){ fi=r.pts.findIndex(Boolean); r.pts.forEach((p,i)=>{ if(p) li=i; }); }
         const nf=niceStamp(H.stamps[fi]), nl=niceStamp(H.stamps[li]);
-        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b, String(r.n), r.status[0],
+        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b, periodLabel(r.period), String(r.n), r.status[0],
           nf?nf.full:String(H.stamps[fi]), nl?nl.full:String(H.stamps[li]),
           intN(r.first.s), intN(r.last.s), (r.dsal>0?"+":"")+intN(r.dsal),
           intN(r.first.cb), intN(r.last.cb), (r.dcb>0?"+":"")+intN(r.dcb),
@@ -3061,18 +3316,23 @@ function exportSet(which){
     const {all} = mtRows();
     return {label:"MID trends", cols:null, sepAfter:[],
       head:[MT.level==="bucket"?"Bucket":MT.level==="merch"?"Merchant":"MID",
-            "Merchant","DBA","Bucket","Reports","Status",
-            "First report","Last report",
+            "Merchant","DBA","Bucket","Month","Reports in month","Status",
+            "First in month","Latest report",
             "Volume first","Volume last","Δ Volume",
             "CB # first","CB # last","Δ CB #",
             "CB % first","CB % last","Δ CB % (pp)",
             "Weighted last","Tier last"],
       rows:all.map(r=>{
         const H=historyAt(MT.level);
-        const fi=r.pts.findIndex(Boolean);
-        let li=-1; r.pts.forEach((p,i)=>{ if(p) li=i; });
+        /* first/last of the CURRENT MONTH, matching the values printed below —
+           the overall first would date a July row against an August figure */
+        let fi=-1, li=-1;
+        r.pts.forEach((p,i)=>{
+          if(p && (!r.period || p.period===r.period)){ if(fi<0) fi=i; li=i; }
+        });
+        if(fi<0){ fi=r.pts.findIndex(Boolean); r.pts.forEach((p,i)=>{ if(p) li=i; }); }
         const nf=niceStamp(H.stamps[fi]), nl=niceStamp(H.stamps[li]);
-        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b, String(r.n), r.status[0],
+        return [r.level==="mid"?r.id:r.key, r.m, r.d, r.b, periodLabel(r.period), String(r.n), r.status[0],
           nf?nf.full:String(H.stamps[fi]), nl?nl.full:String(H.stamps[li]),
           intN(r.first.s), intN(r.last.s), (r.dsal>0?"+":"")+intN(r.dsal),
           intN(r.first.cb), intN(r.last.cb), (r.dcb>0?"+":"")+intN(r.dcb),
