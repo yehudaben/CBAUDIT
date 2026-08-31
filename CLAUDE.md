@@ -275,10 +275,17 @@ disagree about what a report is. `LS_BACKEND` remembers which one to restore.
 - **`probe()` asks Drive rather than writing.** `capabilities.canAddChildren`
   on the folder is exactly what the FS write-probe was approximating, so the
   Drive route is authoritative, one request, and leaves no probe file behind.
-- **Scopes are `drive.readonly` + `drive.file`, not full `drive`.** `drive.file`
-  restricts writes to files this app created, which turns "one file per
-  browser, never touch anyone else's" from a convention into something Google
-  enforces. Both are restricted scopes; an **Internal** Workspace app skips
+- **The scope is full `drive`, and that was measured.** It shipped as
+  `drive.readonly` + `drive.file` on the reasoning that `drive.file` enforces
+  "never touch anyone else's tracker file". Tested against real Drive
+  2026-08-31, both halves came back: creating a file inside a folder the app
+  did **not** create *works*; updating a file the app did not create returns
+  **403** — `"The user has not granted the app … write access to the file"`.
+  That is fatal here, because an events file first written by Drive for
+  Desktop can then never be updated through the API, stranding anyone who
+  used the filesystem route first. Widening elevates nobody: Drive still
+  enforces the shared drive roles, so a Viewer with full scope still cannot
+  write. `drive` is restricted; an **Internal** Workspace app skips
   verification, which is the only reason this is practical.
 - `DRIVE_CLIENT_ID_BAKED` is empty in the repo, and an empty client ID hides
   the Drive option entirely. A client ID is public, not a secret. Settings
@@ -287,11 +294,19 @@ disagree about what a report is. `LS_BACKEND` remembers which one to restore.
   so a test can stub `fetch` and drive the real code. Without a token every
   call still goes through Google.
 
-**Unverified against the real API:** whether `drive.file` permits
-`files.create` with a `parents` reference to a folder the app did not create.
-It should, and the fake models it that way, but nobody has run it against
-Google. If a contributor's first tracker write returns 403, that is the reason
-and the fix is adding `drive` to the scope string.
+- **`auth()` is deliberately not `async`.** The popup has to open inside the
+  click that asked for it; any `await` before `requestAccessToken` — the GIS
+  script load above all — spends the browser's user activation and the popup
+  is blocked. Boot preloads GIS so the synchronous path is the normal one.
+  This was measured, not theorised: the first live attempt failed exactly
+  this way.
+
+**Verified against real Drive, 2026-08-31** (Yehuda's account, the live
+folder): folder resolved by name across shared drives; `capabilities` gave
+root/tracker true; 9 exports listed and downloaded; both tracker files read;
+create-with-parents succeeded and was cleaned up with a 204; PATCH of a
+foreign file 403'd as above. The read path and the create path are known
+good, not assumed.
 
 ## The tracker
 

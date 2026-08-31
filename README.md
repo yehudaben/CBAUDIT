@@ -169,17 +169,22 @@ One-time setup in Google Cloud, by a Workspace admin:
 5. Copy the client ID into **Settings → This browser's folder access**, or bake
    it into `DRIVE_CLIENT_ID_BAKED` in `index.html` so nobody has to.
 
-Scopes requested are `drive.readonly` and `drive.file` — read what is shared
-with you, write only files this app itself created. A client ID is public and
-is safe in the source; it identifies the app and authorises nothing on its own.
+The scope requested is `https://www.googleapis.com/auth/drive`. A client ID is
+public and is safe in the source; it identifies the app and authorises nothing
+on its own.
 
-**One caveat worth knowing before you roll it out.** Whether `drive.file`
-allows creating a file inside a folder the app did not create is the single
-thing that cannot be tested without a live client ID. It should work and the
-test suite models it that way. If the first tracker write from a teammate
-returns a permissions error, that is why — adding
-`https://www.googleapis.com/auth/drive` to the scope string in `DRIVE_IO.SCOPES`
-fixes it at the cost of a broader grant.
+**Why the broad scope, since a narrow one was tried first.** It shipped asking
+for `drive.readonly` + `drive.file`, which would have let the app write only
+files it created itself. Tested against real Drive, `drive.file` turned out to
+allow *creating* a file inside a folder it did not create, but not *updating*
+one — so a tracker file first written by Drive for Desktop could never be
+updated through the API again, permanently stranding anyone who used the folder
+route first.
+
+Worth being clear about what the wider scope does and does not mean: **it
+elevates nobody.** Drive still enforces the shared drive roles, so a Viewer
+holding this scope still cannot write a thing. The scope only decides how much
+of what *you* can already do the app may do on your behalf.
 
 ### One editor, everyone else moves the status
 

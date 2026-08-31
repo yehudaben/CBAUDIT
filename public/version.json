@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.13",
+  "version": "2026.09.14",
   "model": "m1.0",
-  "notes": "Google Drive sign-in is switched on. Connect the shared folder from any browser on any machine, with no Drive for Desktop."
+  "notes": "Google Drive sign-in now works for people who already used the folder route: drive.file could not update a file it had not created, which locked the owner out of their own tracker file."
 }

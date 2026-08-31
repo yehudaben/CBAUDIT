@@ -848,7 +848,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.13";
+const APP_VERSION   = "2026.09.14";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2127,16 +2127,27 @@ const FOLDER = {
    browser. This needs neither, so a teammate can work the tracker from a
    plain browser on any machine — Safari and Firefox included.
 
-   Scopes are deliberately narrow, and the narrowness does real work:
+   The scope is full `drive`, and that was measured rather than assumed.
+   The first build asked for drive.readonly + drive.file, on the reasoning
+   that drive.file mechanically enforces "never touch anyone else's tracker
+   file". Tested against real Drive on 2026-08-31, both halves came back:
 
-     drive.readonly  read the exports, the audits and everyone's tracker files
-     drive.file      write ONLY files this app created
+     creating a file inside a folder the app did NOT create   works
+     updating a file the app did NOT create                   403
 
-   drive.file is what makes "one file per browser, never touch anyone
-   else's" an enforced fact rather than a convention — Google refuses the
-   write even if a bug here asked for it.
+   The second one is fatal here. An events file first written by Drive for
+   Desktop can never be updated through the API, so anyone who used the
+   filesystem route first is permanently stuck on it. That is the owner,
+   today, on the one folder that matters.
 
-   Both are "restricted" scopes, which normally means Google verification.
+   Widening does not elevate anybody. Drive still enforces the shared drive
+   roles — a Viewer holding full scope still cannot write — so the scope only
+   controls how much of what the PERSON may already do the app may do on
+   their behalf. What is lost is a belt-and-braces guarantee against a bug in
+   this file writing to the wrong tracker file; that invariant is still held
+   by fileName() being derived from the device id, and by test_tracker.js.
+
+   `drive` is a restricted scope, which normally means Google verification.
    An app published as Internal to a Workspace domain skips that entirely,
    which is why this is only offered to @paymenthelp.com accounts.
 
@@ -2158,8 +2169,7 @@ const DRIVE_CLIENT_ID_BAKED =
 const DRIVE_IO = {
   kind:"drive",
   label:"Google Drive",
-  SCOPES:"https://www.googleapis.com/auth/drive.readonly "
-        +"https://www.googleapis.com/auth/drive.file",
+  SCOPES:"https://www.googleapis.com/auth/drive",
 
   LS_FOLDER:"cbrc.drive.folder",     /* {id,name} of the connected folder */
   LS_CLIENT:"cbrc.drive.client",     /* optional client-ID override */
@@ -2199,12 +2209,18 @@ const DRIVE_IO = {
      when this browser already has a live Google session and prior consent,
      and otherwise fails quietly into the same "needs-permission" state the
      filesystem backend uses. One click puts it right. */
-  async auth(interactive){
-    if(this.token && Date.now() < this.tokenExp - 60000) return this.token;
+  /* NOT async, and that is load-bearing. Opening the popup has to happen
+     inside the click that asked for it: any await before requestAccessToken —
+     the script load above all — spends the browser's user activation and the
+     popup is blocked. Measured, not theorised: the first live attempt failed
+     exactly this way. When GIS is already present (boot preloads it) this runs
+     straight through with no await at all. */
+  auth(interactive){
+    if(this.token && Date.now() < this.tokenExp - 60000) return Promise.resolve(this.token);
     const cid = this.clientId();
-    if(!cid) throw new Error("No Google client ID is configured for this build.");
-    await this.loadGis();
-    return new Promise((resolve,reject)=>{
+    if(!cid) return Promise.reject(
+      new Error("No Google client ID is configured for this build."));
+    const go = () => new Promise((resolve,reject)=>{
       let done=false;
       const client = google.accounts.oauth2.initTokenClient({
         client_id: cid,
@@ -2221,15 +2237,22 @@ const DRIVE_IO = {
         error_callback: err=>{
           if(done) return; done=true;
           const t = err && err.type;
+          /* on the silent path popup_failed_to_open only means "this needs a
+             click" — reporting it as a blocked popup sends people to their
+             browser settings to fix nothing */
           reject(new Error(
-            t==="popup_closed"  ? "Sign-in window was closed before finishing." :
-            t==="popup_failed_to_open" ? "The sign-in popup was blocked. Allow popups for this site." :
-            (err && err.message) || "Sign-in did not complete."));
+            t==="popup_closed" ? "Sign-in window was closed before finishing." :
+            t==="popup_failed_to_open"
+              ? (interactive ? "The sign-in popup was blocked. Allow popups for this site."
+                             : "Sign-in needs a click.")
+            : (err && err.message) || "Sign-in did not complete."));
         }
       });
       try{ client.requestAccessToken({prompt: interactive ? "" : "none"}); }
       catch(e){ if(!done){ done=true; reject(e); } }
     });
+    if(window.google && google.accounts && google.accounts.oauth2) return go();
+    return this.loadGis().then(go);
   },
 
   /* ---- REST ---- */
@@ -5126,6 +5149,10 @@ syncActive();
 render();
 renderDataStrip();
 UPDATE.start();
+
+/* Fetch Google's sign-in script early so the first click is never the one
+   waiting on a network round trip — that wait is what blocks the popup. */
+if(DRIVE_IO.available()) DRIVE_IO.loadGis().catch(()=>{});
 
 /* if a folder was connected previously, offer to reopen it */
 (async function(){
