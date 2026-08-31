@@ -512,6 +512,21 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .orow .ac.f-rdr{background:rgba(208,59,59,.07)}
 .orow .ac.f-mc {background:rgba(42,120,214,.08)}
 .orow .ac.f-gen{background:rgba(236,131,90,.13)}
+/* ---- the outcome chart ----
+   The row becomes two columns once there is a line to draw: the words on the
+   left, the shape on the right. Below 760px the chart drops under the text
+   rather than squeezing both, because a 90px-wide sparkline says nothing. */
+.orow.haschart{display:flex;gap:calc(14px*var(--d));align-items:center}
+.orow .obody{flex:1;min-width:0}
+.ochart{flex:0 0 150px;width:150px}
+.ochart svg{display:block;width:100%;height:38px}
+.oscale{display:flex;justify-content:space-between;font-size:var(--fs-xs);
+  color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px}
+@media (max-width:760px){
+  .orow.haschart{flex-direction:column;align-items:stretch}
+  .ochart{flex:none;width:100%}
+}
+@media print{ .ochart{flex:0 0 120px;width:120px} }
 /* ---- the measurement date, overridable ---- */
 .mfrom{font-size:var(--fs-xs);color:var(--muted);display:inline-flex;gap:6px;
   align-items:center;flex-wrap:wrap}
@@ -879,7 +894,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.15";
+const APP_VERSION   = "2026.09.16";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1730,6 +1745,15 @@ function sparkSVG(vals, opts){
     .join(" ")).join(" ");
   const last = pts[pts.length-1];
   const col = o.color || "var(--accent)";
+  /* o.mark is the report the fix was measured from. Drawn as a vertical rule
+     so the line either side of it reads as before and after — which is the
+     whole question an outcome is asking. */
+  let markLine = "";
+  if(o.mark!=null && o.mark>=0 && o.mark<n && n>1){
+    const mx = ((o.mark/(n-1))*96+2).toFixed(1);
+    markLine = `<line x1="${mx}" x2="${mx}" y1="1" y2="37" stroke="var(--ink2)"
+      stroke-width="1" stroke-dasharray="2 2" opacity=".75"></line>`;
+  }
   const thr = o.threshold;
   let thrLine="";
   if(thr!=null && thr>=min && thr<=max){
@@ -1756,7 +1780,7 @@ function sparkSVG(vals, opts){
   }
   return `<svg viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden="true"
       class="${o.pick?"pickable":""}">
-    ${thrLine}
+    ${thrLine}${markLine}
     <path d="${path}" fill="none" stroke="${col}" stroke-width="2"
       stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
     ${marker}${picker}
@@ -3188,7 +3212,7 @@ function historyAt(level){
       rec.m=g.m; rec.d=g.d; rec.b=g.b; rec.id=g.id;
       rec.bset = [...new Set(rec.bset.concat([...g.bset]))];
       rec.pts[si] = {s:agg.s, ds:agg.ds, cb:agg.cb, cv:agg.cv, cbp:agg.cbp, rfp:agg.rfp,
-                     cov:agg.cov, w:agg.w, tier:tierOf(agg),
+                     cov:agg.cov, mcs:agg.mcs, w:agg.w, tier:tierOf(agg),
                      f5:agg.F.indexOf("F5")>=0, zs:agg.zs, nf:agg.nf, thin:agg.thin,
                      period:periods[si], day:days[si],
                      nmids:g.n, over:g.over, flagged:g.flagged};
@@ -3880,6 +3904,40 @@ function trackerRowHTML(t, A){
     </div>
   </div>`;
 }
+/* The metric this action is judged by, plotted across every report in the
+   library, with a rule where the fix landed. Every tracked metric is a RATE,
+   so unlike the Trends counts this line needs no break at the 1st — a rate
+   survives the monthly reset that a count does not.
+
+   Returns "" rather than an empty box when there is nothing to draw: one
+   report is a dot, not a trend, and drawing it would imply movement nobody
+   has observed. */
+function outcomeChartHTML(o){
+  if(LIB.length < 2) return "";
+  const H = historyAt("mid");
+  const rec = H.rows.find(r => r.key === o.mid);
+  if(!rec) return "";
+  const vals = rec.pts.map(p => p ? p[o.metric] : null);
+  if(vals.filter(v => v!=null && !isNaN(v)).length < 2) return "";
+
+  /* where the baseline was read from — the rule goes there, not at "today" */
+  let mark = null;
+  if(o.baseStamp){
+    const bi = H.stamps.indexOf(o.baseStamp);
+    if(bi >= 0) mark = bi;
+  }
+  const fam = famOfAction(o.action);
+  const col = fam==="rdr" ? "var(--rdr-ink)" : fam==="mc" ? "var(--mc-ink)" : "var(--gen-ink)";
+  const seen = vals.filter(v => v!=null && !isNaN(v));
+  const lo = Math.min(...seen), hi = Math.max(...seen);
+  const dp = o.dp==null ? 1 : o.dp;
+  const dir = o.spec && o.spec.good==="up" ? "higher is better" : "lower is better";
+  return `<div class="ochart" title="${esc(o.metricLabel)} across ${H.stamps.length} reports — ${dir}">
+    ${sparkSVG(vals, {color:col, mark})}
+    <div class="oscale"><span>${lo.toFixed(dp)}%</span><span>${hi.toFixed(dp)}%</span></div>
+  </div>`;
+}
+
 function outcomeRowHTML(o, A){
   const e = A && A.byMid ? A.byMid[o.mid] : null;
   const v = VERDICT[o.verdict] || {t:o.verdict, c:"v-fl"};
@@ -3902,7 +3960,9 @@ function outcomeRowHTML(o, A){
   }
   const fam = famOfAction(o.action);
   const doneDay = o.doneAt ? String(o.doneAt).slice(0,10) : "";
-  return `<div class="orow fam-${fam}">
+  const chart = outcomeChartHTML(o);
+  return `<div class="orow fam-${fam}${chart?" haschart":""}">
+    <div class="obody">
     <div class="tmain">
       <span class="nm">${esc(e?e.m:o.mid)}</span>
       ${e?`<span class="dba">— ${esc(e.d)}</span>`:""}
@@ -3926,6 +3986,8 @@ function outcomeRowHTML(o, A){
         ? `<button class="trkc" data-status-for="${esc(o.mid)}" data-status="closed">Close</button>`
         : `<button class="trkc" data-status-for="${esc(o.mid)}" data-status="done">Reopen</button>`}
     </div>
+    </div>
+    ${chart}
   </div>`;
 }
 function trackerPageHTML(A){
@@ -3981,7 +4043,8 @@ function trackerPageHTML(A){
                  .map(r=>TRACKER.outcome(r.mid));
   P.push(`<p class="lede">Every fix marked done, measured against the numbers captured at the time.
     Each action is judged by the rate that would move if it worked — never a count, because the portal
-    zeroes every counter on the 1st and a count would read the reset as a success.</p>`);
+    zeroes every counter on the 1st and a count would read the reset as a success.
+    The dashed line on each chart is where the fix landed.</p>`);
   if(!outs.length){
     P.push(`<div class="empty">No fixes marked done yet. Move a row to
       <b>Action done</b> on the Board and its baseline is captured automatically.</div>`);
@@ -5290,6 +5353,25 @@ window.__trackDoneAt = (mid,at)=>{
   catch(e){ return {ok:false, noReport:!!e.noReport, err:e.message}; }
 };
 window.__famOf = a => famOfAction(a);
+window.__outcomeCharts = () => [...document.querySelectorAll(".orow")].map(r=>{
+  const svg = r.querySelector(".ochart svg");
+  const scale = r.querySelector(".oscale");
+  return {
+    hasChart: !!svg,
+    points: svg ? (svg.querySelector("path")?.getAttribute("d")||"").split(/[ML]/).length-1 : 0,
+    hasMark: svg ? !!svg.querySelector("line[stroke-dasharray]") : false,
+    stroke: svg ? svg.querySelector("path")?.getAttribute("stroke") : null,
+    scale: scale ? scale.textContent.trim().replace(/\s+/g," ") : null,
+    twoCol: r.classList.contains("haschart")
+  };
+});
+window.__outcomeSeries = mid => {
+  const o = TRACKER.outcome(mid); if(!o) return null;
+  const H = historyAt("mid"); const rec = H.rows.find(r=>r.key===mid);
+  return rec ? {metric:o.metric, stamps:H.stamps,
+                vals:rec.pts.map(p=>p?p[o.metric]:null),
+                baseStamp:o.baseStamp, markIndex:H.stamps.indexOf(o.baseStamp)} : null;
+};
 window.__trackerColours = () => {
   const pick = sel => [...document.querySelectorAll(sel)].map(n=>{
     const m = String(n.className).match(/fam-(rdr|mc|gen)/);

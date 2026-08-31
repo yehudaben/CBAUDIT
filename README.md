@@ -145,6 +145,12 @@ descriptor work, **orange** for the rate itself (Agent Flag and Watch). Colour
 says *which* problem, never how bad it is — the action name always sits beside
 it, so nothing depends on seeing the hue.
 
+Each outcome row carries a small chart of the figure its action is judged by,
+across every report you have loaded, with a **dashed line where the fix
+landed**. The verdict tells you whether it moved; the chart tells you how — a
+clean fall, a spike that settled, or nothing much happening. Nothing is drawn
+until there are two reports, because one report is a dot, not a trend.
+
 On the **Outcomes** tab each row has a **measuring from** date you can move.
 Use it when a fix landed before anyone got round to ticking it off: set the day
 it actually went in and the verdict recomputes from there. The row also shows

@@ -473,6 +473,34 @@ now that lost time came straight off the measurement window.
 - The outcome row shows `baseline from <date>` so the provenance is on screen
   and auditable.
 
+### The outcome chart
+
+Added 2026.09.16. A verdict is two numbers; the question "is this closing" is
+a shape. Each outcome row plots the metric its action is judged by across every
+report, with a dashed rule at the report the baseline came from — so the line
+either side of it reads as before and after.
+
+- `outcomeChartHTML()` reads `historyAt("mid")`, which is cached against the
+  library composition and the model, so N tracked rows cost one pass not N.
+- **`mcs` had to be added to the `pts` record.** `historyAt` carried `cbp` and
+  `cov` but not MC share, so an MC fix would have plotted an empty line. The
+  test asserts the series actually has values, not merely that a chart exists.
+- **No `breaks`, deliberately.** Every tracked metric is a rate, and a rate
+  survives the monthly reset that a count does not. The Trends sparklines cut
+  at the 1st because they plot counts; these must not.
+- `sparkSVG` gained `o.mark` — a dashed vertical rule at an index. It is drawn
+  before the path so the line sits over it.
+- **Nothing is drawn below two points.** One report is a dot, not a trend, and
+  a chart would imply movement nobody has observed.
+- Line colour is the family's **text-safe ink**, matching the row.
+
+**A test trap worth remembering.** The first version asserted the plotted
+metric via `__outcomeSeries`, a hook that computes its own series — so
+hardcoding the chart to `cbp` passed cleanly. The assertion now reads the
+rendered `path` `d` and requires it to CHANGE when the action changes. If you
+add a chart, assert on what was drawn, never on a parallel computation of what
+should have been.
+
 ### Judging whether it worked
 
 Each action type is judged by the metric that would actually move if the fix

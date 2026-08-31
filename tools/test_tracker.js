@@ -478,6 +478,56 @@ const base = o => Object.assign(
     return out;
   }, {mids: [M_FAT], fx});
 
+  /* ---- 12. the outcome chart ----
+     The question an outcome asks is "is this closing", and a number pair
+     answers it worse than a shape does. Asserted from the rendered SVG, not
+     from the series, because a series with no chart behind it draws nothing. */
+  R.chart = await page.evaluate(async mids => {
+    const [FAT] = mids;
+    const out = {};
+    TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0; TRACKER.fold();
+
+    /* one report in the library: a dot is not a trend, so no chart at all */
+    const keep = LIB.slice();
+    LIB.length = 0; LIB.push(keep[0]); syncActive();
+    window.__track(FAT, 'Watch');
+    window.__trackStatus(FAT, 'done');
+    VIEW.trackTab = 'outcomes'; window.__setView('tracker');
+    out.singleReport = window.__outcomeCharts()[0];
+
+    /* full library back: now there is something to draw */
+    LIB.length = 0; keep.forEach(k => LIB.push(k)); syncActive();
+    invalidateHL();
+    window.__trackDoneAt(FAT, '2026-07-25T12:00:00');
+    VIEW.trackTab = 'outcomes'; render();
+    out.charts = window.__outcomeCharts();
+    out.series = window.__outcomeSeries(FAT);
+
+    /* The metric PLOTTED must follow the action. Read from the drawn path,
+       not from the series hook — the hook computes its own series, so an
+       assertion on it passes happily while the chart draws something else. */
+    const drawn = () => {
+      const c = window.__outcomeCharts()[0];
+      const svg = document.querySelector('.ochart svg');
+      return {d: svg ? svg.querySelector('path').getAttribute('d') : null,
+              scale: c.scale, stroke: c.stroke};
+    };
+    out.watchDrawn = drawn();
+    window.__trackAction(FAT, 'RDR Fix (ARN Lookup)');
+    render();
+    out.rdrDrawn = drawn();
+    out.afterRetarget = {metric: window.__outcomeSeries(FAT).metric,
+                         stroke: out.rdrDrawn.stroke};
+    window.__trackAction(FAT, 'MC Fix (Descriptor Lookup)');
+    render();
+    out.mcDrawn = drawn();
+    out.mcMetric = window.__outcomeSeries(FAT).metric;
+    out.mcHasValues = window.__outcomeSeries(FAT).vals.filter(v => v != null).length;
+    window.__trackAction(FAT, 'Watch');
+    render();
+    return out;
+  }, [M_FAT]);
+
   R.finalErrors = errs.slice(R.bootErrors.length + R.afterLoadErrors.length);
   console.log(JSON.stringify(R, null, 2));
 
@@ -643,6 +693,44 @@ const base = o => Object.assign(
   want(B.unchangedAfterRefusal, 'a refused date must leave the baseline alone');
   want(B.dateInputs > 0, 'the outcomes tab must offer the date control');
   want(B.showsBaselineSource, 'the row must say which report the baseline came from');
+
+  const G = R.chart;
+  want(!G.singleReport.hasChart,
+       'one report is a dot, not a trend — no chart should be drawn');
+  want(G.charts.length === 1 && G.charts[0].hasChart,
+       'with a full library the outcome row must carry a chart');
+  want(G.charts[0].twoCol, 'a row with a chart must lay out as two columns');
+  want(G.charts[0].points >= 3,
+       'the line must plot every report, got ' + G.charts[0].points + ' points');
+  want(G.charts[0].hasMark,
+       'the chart must mark where the fix landed, or before and after are indistinguishable');
+  want(/rdr-ink|mc-ink|gen-ink/.test(G.charts[0].stroke || ''),
+       'the line must use the text-safe family ink, got ' + G.charts[0].stroke);
+  want(/%/.test(G.charts[0].scale || ''),
+       'the chart must label its range, got ' + G.charts[0].scale);
+  want(G.series.metric === 'cbp', 'Watch is judged by CB %, got ' + G.series.metric);
+  want(G.series.markIndex >= 0,
+       'the mark must land on the report the baseline came from, got ' + G.series.markIndex);
+  want(G.series.vals.filter(v => v != null).length >= 3,
+       'the series must have a value per report');
+  want(G.afterRetarget.metric === 'cov',
+       'retargeting to an RDR fix must plot coverage, got ' + G.afterRetarget.metric);
+  want(/rdr-ink/.test(G.afterRetarget.stroke || ''),
+       'and recolour to the RDR family, got ' + G.afterRetarget.stroke);
+  want(G.mcMetric === 'mcs', 'an MC fix must plot MC share, got ' + G.mcMetric);
+  want(G.mcHasValues >= 3,
+       'MC share must actually be carried in the series, got ' + G.mcHasValues + ' values');
+
+  /* the drawn line, not the hook: retargeting must redraw a DIFFERENT shape */
+  want(G.watchDrawn.d && G.rdrDrawn.d && G.mcDrawn.d, 'every action must draw a path');
+  want(G.watchDrawn.d !== G.rdrDrawn.d,
+       'the plotted line must change when the action does — CB % and RDR coverage '
+       + 'cannot be the same shape');
+  want(G.rdrDrawn.d !== G.mcDrawn.d,
+       'RDR coverage and MC share cannot be the same shape either');
+  want(G.watchDrawn.scale !== G.rdrDrawn.scale,
+       'the labelled range must follow the metric too, got ' + G.watchDrawn.scale
+       + ' vs ' + G.rdrDrawn.scale);
 
   console.log('\ntracker assertions        : ' + (fail.length ? fail.length + ' FAILED' : '0 failures'));
   fail.forEach(f => console.log('  FAIL  ' + f));

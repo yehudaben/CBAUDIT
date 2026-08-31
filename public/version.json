@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.15",
+  "version": "2026.09.16",
   "model": "m1.0",
-  "notes": "The tracker now carries the same problem-family colours as the audit card — RDR red, MC blue, general orange. And an outcome's measuring-from date can be moved back, for a fix that landed before anyone ticked it off."
+  "notes": "Each outcome now carries a chart of the metric its action is judged by, across every report, with a dashed rule where the fix landed — so before and after read as a shape rather than two numbers."
 }
