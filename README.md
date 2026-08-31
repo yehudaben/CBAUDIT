@@ -147,48 +147,62 @@ merges. Press **Sync with team** to pull in what others have done.
 Needs Chrome or Edge, like the folder feature it builds on. Without a folder
 the tracker still works, private to that browser.
 
-### One editor, everyone else reads
+### One editor, everyone else moves the status
 
 The audit folder lives in **Google Shared Drives → PaymentHelp → CB Audit
-Location**. Who may write is decided there, not in the app:
+Location**. Who may write is decided there, not in the app.
 
-| Shared-drive role | Can add exports | Can save audits | Can change the tracker |
-|---|---|---|---|
-| Manager / Content manager | yes | yes | yes |
-| Contributor | yes | yes | yes |
-| **Commenter / Viewer** | no | no | no |
+**The setup that gives you what you want:**
 
-Set yourself Manager and the team **Viewer**, and the drive itself refuses
-their writes — the app cannot be talked around, because the refusal happens in
-the filesystem.
+1. Shared-drive membership: you **Manager**, the team **Viewer**.
+2. Then share the `tracker/` **subfolder** with the team as **Contributor**.
 
-The app then mirrors that. At every connect it writes a throwaway dot-file to
-the folder and deletes it; if that write is refused, the browser switches to
-read-only:
+Step 2 is legal because inside a shared drive a folder can be shared to grant
+*more* access than someone's drive-level role — never less. So the team can
+write their own tracker file and nothing else: they cannot add an export,
+cannot save an audit, cannot delete anything.
 
-- the folder strip says **View only** and drops **Save audit**
-- tracker rows show action and status as plain text, with no dropdown, no
-  status buttons, no Remove
-- the `+` on audit rows disappears; a green tick still marks tracked MIDs
-- **Refresh from team** still pulls everything the team has done
+| | Add exports | Save audits | Move a status | Choose what's tracked |
+|---|---|---|---|---|
+| You (Manager) | yes | yes | yes | yes |
+| Team (Viewer + Contributor on `tracker/`) | no | no | **yes** | no |
+| Team (Viewer only) | no | no | no | no |
 
-This matters more than it sounds. Without it a viewer's clicks land in their
-own browser storage, fold into their own board, and look exactly like a change
-the team can see — while reaching nobody. Read-only has to *look* read-only.
+### What the app does with that
 
-**Settings → This browser's folder access** shows what was detected, offers a
-**Re-check** after a permission change, and has a **Stay read-only in this
-browser** box for a machine that could write but shouldn't.
+At every connect it writes a throwaway dot-file to the folder **and to
+`tracker/`**, then deletes them. Two probes, because those two folders can
+carry different permissions — no single writable/not-writable flag can tell
+contributor apart from owner. What it finds picks the role:
 
-A caveat on Google's model: inside a shared drive, sharing a folder can only
-*widen* someone's access, never narrow it. If your team are Content managers on
-**PaymentHelp** as a whole, you cannot make this one folder read-only for them
-— move it to its own shared drive where they are Viewers.
+**Contributor** — badge reads **Status only**. The four status buttons work and
+sync to the team. The action dropdown becomes a plain label, Remove disappears,
+the `+` on audit rows disappears, **Save audit** disappears.
 
-**Copy** and **Download CSV** on the Tracker tab give you the workbook layout
-you already use — the same first 20 columns, plus Status, Done on, Measured by,
-Baseline, Now, Verdict and Days since. MIDs now export as text, so Excel stops
-turning `0700100000199484` into a number and dropping the leading zero.
+**Viewer** — badge reads **View only**. Everything above is text. **Refresh
+from team** still pulls the whole board.
+
+Why the action is owner-only: it decides *which metric* judges whether the fix
+worked, and the outcome is measured against it. Letting it move mid-measurement
+would change the answer retroactively.
+
+This matters more than it sounds. Without any of it a restricted person's
+clicks land in their own browser storage, fold into their own board, and look
+exactly like a change the team can see — while reaching nobody. Restricted has
+to *look* restricted.
+
+**Settings → This browser's folder access** shows what was detected — including
+each folder's answer — offers a **Re-check** after you change someone's role,
+and has a menu to hold a browser to a lower role than the folder allows. It
+can only narrow, never widen: claiming a role the drive won't honour would put
+the buttons back and break the writes behind them.
+
+Two honest limits. A Contributor can *edit* existing files, so this protects
+against deletion and accident, not against a determined edit — fine for a
+trusted team, worth knowing. And one 0-byte `.cbrc-access-check` may sit in
+`tracker/` on a contributor's machine, because they are allowed to create it
+and not to delete it; it is invisible to the app, which reads only `.csv` and
+`.jsonl`.
 
 ---
 

@@ -248,95 +248,127 @@ const base = o => Object.assign(
     return {cols: set.head.length, order: set.head.join('|')};
   });
 
-  /* ---- 9. read-only folder: the viewer role ----
-     A teammate with view-only access to the shared drive must get a board
-     that cannot be edited, not one whose edits vanish. The failure this
-     guards is silent: without it every click is recorded locally, folds into
-     that person's own view, and reaches nobody.
+  /* ---- 9. folder roles ----
+     Three roles, detected from two folders. The middle one is the point: on a
+     shared drive a folder can be shared to grant MORE access than the member
+     holds at drive level, so a team of Viewers can hold Contributor on
+     tracker/ alone — able to move a status, unable to add an export, save an
+     audit, or change which deals are tracked.
 
      Step 4c left FOLDER.handle as a bare stub, so this installs a handle of
-     its own — one that hands out a file handle and then refuses the write,
-     which is exactly how a read-only synced drive behaves. */
-  R.readOnly = await page.evaluate(async (mids) => {
-    const [FAT] = mids;
-    const out = {}, files = {}, tfiles = {};
-    const H = {
-      __ro: false, __files: {},
+     its own: one that hands out a file handle and then refuses the write,
+     which is exactly how a read-only synced drive behaves, with root and
+     tracker/ carrying separate flags. */
+  R.roles = await page.evaluate(async (mids) => {
+    const [FAT, THIN] = mids;
+    const out = {}, tfiles = {};
+    const mkdir = (own) => ({
+      __files: {},
       async getFileHandle(n, o){
-        const self = this;
-        if ((!o || !o.create) && !(n in self.__files)) {
+        const d = this;
+        if ((!o || !o.create) && !(n in d.__files)) {
           const e = new Error('not found'); e.name = 'NotFoundError'; throw e;
         }
         return {async createWritable(){
-          if (self.__ro) { const e = new Error('read-only'); e.name = 'NotAllowedError'; throw e; }
-          return {async write(b){ self.__files[n] = b.size || 0; files[n] = 1; },
-                  async close(){}};
+          if (own()) { const e = new Error('read-only'); e.name = 'NotAllowedError'; throw e; }
+          return {async write(b){ d.__files[n] = b.size || 0; }, async close(){}};
         }};
       },
       async removeEntry(n){ delete this.__files[n]; }
+    });
+    const H = {__ro: false, __roTracker: false};
+    Object.assign(H, mkdir(() => H.__ro));
+    const TD = mkdir(() => H.__roTracker);
+    H.getDirectoryHandle = async (n, o) => {
+      if (n === FOLDER.TRACK_DIR) return TD;
+      const e = new Error('no dir'); e.name = 'NotFoundError'; throw e;
     };
     FOLDER.handle = H; FOLDER.state = 'connected'; FOLDER.name = 'TestFolder';
     FOLDER.writeTracker = async (n, x) => {
-      if (!FOLDER.canWrite()) throw new Error('read-only');
+      if (!FOLDER.canTrackWrite()) throw new Error('read-only');
       tfiles[n] = x; return n;
     };
     FOLDER.readTracker = async () => Object.keys(tfiles).map(n => ({name: n, text: tfiles[n]}));
 
-    /* writable to begin with, with one row the team can see */
-    await window.__mockReadOnly(false);
+    const controls = () => ({
+      status: document.querySelectorAll('[data-status-for]').length,
+      action: document.querySelectorAll('[data-action-for]').length,
+      remove: document.querySelectorAll('[data-untrack]').length,
+      track:  document.querySelectorAll('[data-track]').length
+    });
+
+    /* ---- owner: both folders writable ---- */
+    await window.__mockAccess(true, true);
     TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0; TRACKER.fold();
     window.__track(FAT, 'Watch');
-    out.ownerCanTrack = !!window.__tracker().rows.find(r => r.mid === FAT);
-    out.ownerRole     = window.__folderRole();
+    window.__track(THIN, 'Watch');
+    await TRACKER.flush();
+    out.owner = {role: window.__folderRole(),
+                 tracked: window.__tracker().rows.length,
+                 strip: window.__strip().buttons};
+    window.__setView('tracker');
+    out.owner.controls = controls();
 
-    /* the drive goes read-only under us — exactly the teammate's case */
-    const w = await window.__mockReadOnly(true);
-    out.probeDetects   = (w === false);
-    out.viewerRole     = window.__folderRole();
-    out.probeCleanedUp = !window.__folderRole().probeLeft;
-    out.teamRowVisible = !!window.__tracker().rows.find(r => r.mid === FAT);
-
-    /* every writer must refuse, and refuse rather than record locally */
-    const before = window.__trackerEvents().length;
+    /* ---- contributor: root read-only, tracker/ writable ---- */
+    out.contributorRole = await window.__mockAccess(false, true);
+    out.contributor = {role: window.__folderRole()};
+    /* a status moves, and it reaches the folder */
+    const b1 = window.__trackerEvents().length;
     window.__trackStatus(FAT, 'doing');
-    window.__trackAction(FAT, 'Agent Flag');
-    window.__untrack(FAT);
-    out.eventsAdded     = window.__trackerEvents().length - before;
-    out.statusUnchanged = (window.__tracker().rows.find(r => r.mid === FAT) || {}).status;
-
-    /* the controls that would do nothing are not rendered */
-    window.__setView('tracker');
-    out.statusButtons  = document.querySelectorAll('[data-status-for]').length;
-    out.actionSelects  = document.querySelectorAll('[data-action-for]').length;
-    out.removeButtons  = document.querySelectorAll('[data-untrack]').length;
-    out.trackButtons   = document.querySelectorAll('[data-track]').length;
-    out.readOnlyLabels = document.querySelectorAll('.trkro, .trkst.ro').length;
-    out.stripButtons   = window.__strip().buttons;
-    out.badge          = !!document.querySelector('.robadge');
-
-    /* refused at the FOLDER layer too, not merely hidden in the UI. Tested
-       against writeFile directly: saveCurrentToFolder catches and toasts. */
-    try { await FOLDER.writeFile('x.csv', 'a'); out.saveThrew = false; }
-    catch (e) { out.saveThrew = /read-only/i.test(e.message); }
-
-    /* back to writable: controls return and writing works again */
-    await window.__mockReadOnly(false);
-    window.__setView('tracker');
-    out.controlsReturn = document.querySelectorAll('[data-status-for]').length > 0;
+    await TRACKER.flush();
+    out.contributor.statusEvents = window.__trackerEvents().length - b1;
+    out.contributor.statusTook   = (window.__tracker().rows.find(r => r.mid === FAT) || {}).status;
+    out.contributor.reachedFolder = Object.keys(tfiles).length > 0 &&
+      Object.values(tfiles).join('').indexOf('"doing"') >= 0;
+    /* everything that decides what is tracked, or how it is judged, refuses */
     const b2 = window.__trackerEvents().length;
-    window.__trackStatus(FAT, 'doing');
-    out.writesResume = window.__trackerEvents().length - b2;
+    window.__trackAction(FAT, 'Agent Flag');
+    window.__untrack(THIN);
+    window.__track('0000000000000001', 'Watch');
+    out.contributor.blockedEvents = window.__trackerEvents().length - b2;
+    out.contributor.actionHeld    = (window.__tracker().rows.find(r => r.mid === FAT) || {}).action;
+    out.contributor.stillTracked  = window.__tracker().rows.length;
+    window.__setView('tracker');
+    out.contributor.controls = controls();
+    out.contributor.strip    = window.__strip().buttons;
+    out.contributor.badge    = (document.querySelector('.robadge') || {}).textContent;
+    try { await FOLDER.writeFile('x.csv', 'a'); out.contributor.auditThrew = false; }
+    catch (e) { out.contributor.auditThrew = /read-only/i.test(e.message); }
 
-    /* the explicit override: a browser that CAN write choosing not to */
-    await window.__setRolePref('viewer');
-    out.forcedViewer = window.__folderRole().viewer;
+    /* ---- viewer: neither writable ---- */
+    out.viewerRole = await window.__mockAccess(false, false);
+    out.viewer = {role: window.__folderRole()};
     const b3 = window.__trackerEvents().length;
     window.__trackStatus(FAT, 'done');
-    out.forcedBlocks = window.__trackerEvents().length - b3;
+    out.viewer.statusEvents = window.__trackerEvents().length - b3;
+    out.viewer.teamRowVisible = !!window.__tracker().rows.find(r => r.mid === FAT);
+    window.__setView('tracker');
+    out.viewer.controls = controls();
+    out.viewer.strip    = window.__strip().buttons;
+    out.viewer.badge    = (document.querySelector('.robadge') || {}).textContent;
+
+    /* ---- back to owner: everything returns ---- */
+    await window.__mockAccess(true, true);
+    window.__setView('tracker');
+    out.restored = {role: window.__folderRole().role, controls: controls()};
+    const b4 = window.__trackerEvents().length;
+    window.__trackAction(FAT, 'Agent Flag');
+    out.restored.writesResume = window.__trackerEvents().length - b4;
+
+    /* ---- the preference may narrow, never widen ---- */
+    await window.__setRolePref('contributor');
+    out.narrowed = window.__folderRole().role;
+    const b5 = window.__trackerEvents().length;
+    window.__trackAction(FAT, 'Watch');
+    out.narrowedBlocks = window.__trackerEvents().length - b5;
+    await window.__mockAccess(false, false);          /* folder says viewer... */
+    await window.__setRolePref('contributor');        /* ...preference says more */
+    out.cannotWiden = window.__folderRole().role;
     await window.__setRolePref('auto');
-    out.restored = !window.__folderRole().viewer;
+    await window.__mockAccess(true, true);
+    out.finalRole = window.__folderRole().role;
     return out;
-  }, [M_FAT]);
+  }, [M_FAT, M_THIN]);
 
   R.finalErrors = errs.slice(R.bootErrors.length + R.afterLoadErrors.length);
   console.log(JSON.stringify(R, null, 2));
@@ -403,33 +435,53 @@ const base = o => Object.assign(
        'Tier|Flags|Primary|Action|Bucket|Merchant|DBA|MID|# Sales|$ Sales|CB #|CB Volume|CB %|$ Refunds|Refund %|MC|Visa|# RDR|RDR Coverage %|Amex|Disc',
        'the audit export order must not drift');
 
-  const RO = R.readOnly;
-  want(RO.ownerCanTrack, 'an owner must be able to track');
-  want(RO.ownerRole.writable === true && RO.ownerRole.viewer === false,
-       'a writable folder must read as owner, got ' + JSON.stringify(RO.ownerRole));
-  want(RO.probeDetects, 'probe must detect a folder that hands out a handle then refuses the write');
-  want(RO.viewerRole.viewer === true && RO.viewerRole.canWrite === false,
-       'a read-only folder must read as viewer, got ' + JSON.stringify(RO.viewerRole));
-  want(RO.probeCleanedUp, 'the probe file must never be left behind in a shared folder');
-  want(RO.teamRowVisible, 'a viewer must still see what the team is tracking');
-  want(RO.eventsAdded === 0,
-       'a viewer must record nothing locally, got ' + RO.eventsAdded + ' events');
-  want(RO.statusUnchanged === 'required',
-       'a viewer click must not change the folded state, got ' + RO.statusUnchanged);
-  want(RO.statusButtons === 0, 'no status buttons in read-only, got ' + RO.statusButtons);
-  want(RO.actionSelects === 0, 'no action dropdowns in read-only, got ' + RO.actionSelects);
-  want(RO.removeButtons === 0, 'no remove buttons in read-only, got ' + RO.removeButtons);
-  want(RO.trackButtons === 0, 'no + track buttons in read-only, got ' + RO.trackButtons);
-  want(RO.readOnlyLabels > 0, 'read-only rows must still show action and status as text');
-  want(RO.stripButtons.indexOf('Save audit') < 0,
-       'Save audit must be hidden in read-only, got ' + JSON.stringify(RO.stripButtons));
-  want(RO.badge, 'the folder strip must say View only');
-  want(RO.saveThrew, 'FOLDER.writeFile must refuse a read-only folder, not just hide the button');
-  want(RO.controlsReturn, 'controls must return when write access returns');
-  want(RO.writesResume === 1, 'writing must resume, got ' + RO.writesResume + ' events');
-  want(RO.forcedViewer, 'the explicit override must force read-only on a writable folder');
-  want(RO.forcedBlocks === 0, 'the forced viewer must record nothing, got ' + RO.forcedBlocks);
-  want(RO.restored, 'clearing the override must restore write access');
+  const RL = R.roles;
+  want(RL.owner.role.role === 'owner', 'both folders writable must read as owner');
+  want(RL.owner.tracked === 2, 'the owner must be able to track, got ' + RL.owner.tracked);
+  want(RL.owner.strip.indexOf('Save audit') >= 0, 'the owner keeps Save audit');
+  want(RL.owner.controls.action > 0 && RL.owner.controls.remove > 0,
+       'the owner keeps every tracker control');
+
+  want(RL.contributorRole === 'contributor',
+       'root read-only + tracker writable must read as contributor, got ' + RL.contributorRole);
+  want(RL.contributor.statusEvents === 1,
+       'a contributor must be able to move a status, got ' + RL.contributor.statusEvents);
+  want(RL.contributor.statusTook === 'doing',
+       'the status must actually take, got ' + RL.contributor.statusTook);
+  want(RL.contributor.reachedFolder, 'a contributor status must reach the folder, not just the board');
+  want(RL.contributor.blockedEvents === 0,
+       'action, untrack and track must all refuse for a contributor, got '
+       + RL.contributor.blockedEvents + ' events');
+  want(RL.contributor.actionHeld === 'Watch',
+       'the action must not move under a contributor, got ' + RL.contributor.actionHeld);
+  want(RL.contributor.stillTracked === 2, 'a contributor must not change what is tracked');
+  want(RL.contributor.controls.status > 0, 'a contributor keeps the status buttons');
+  want(RL.contributor.controls.action === 0, 'a contributor gets no action dropdown');
+  want(RL.contributor.controls.remove === 0, 'a contributor gets no Remove');
+  want(RL.contributor.controls.track === 0, 'a contributor gets no + on audit rows');
+  want(RL.contributor.strip.indexOf('Save audit') < 0, 'a contributor cannot save an audit');
+  want(RL.contributor.badge === 'Status only',
+       'the strip must say Status only, got ' + RL.contributor.badge);
+  want(RL.contributor.auditThrew, 'writeFile must refuse a contributor at the FOLDER layer');
+
+  want(RL.viewerRole === 'viewer', 'neither folder writable must read as viewer');
+  want(RL.viewer.statusEvents === 0,
+       'a viewer must record nothing, got ' + RL.viewer.statusEvents);
+  want(RL.viewer.teamRowVisible, 'a viewer must still see what the team is tracking');
+  want(RL.viewer.controls.status === 0 && RL.viewer.controls.action === 0
+       && RL.viewer.controls.remove === 0 && RL.viewer.controls.track === 0,
+       'a viewer gets no tracker controls at all');
+  want(RL.viewer.badge === 'View only', 'the strip must say View only, got ' + RL.viewer.badge);
+
+  want(RL.restored.role === 'owner', 'write access returning must restore owner');
+  want(RL.restored.controls.action > 0, 'controls must return with write access');
+  want(RL.restored.writesResume === 1, 'writing must resume, got ' + RL.restored.writesResume);
+
+  want(RL.narrowed === 'contributor', 'the preference must be able to narrow owner to contributor');
+  want(RL.narrowedBlocks === 0, 'a narrowed browser must be held to its role');
+  want(RL.cannotWiden === 'viewer',
+       'the preference must never widen past the folder, got ' + RL.cannotWiden);
+  want(RL.finalRole === 'owner', 'clearing the preference must restore the detected role');
 
   console.log('\ntracker assertions        : ' + (fail.length ? fail.length + ' FAILED' : '0 failures'));
   fail.forEach(f => console.log('  FAIL  ' + f));

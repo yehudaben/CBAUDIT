@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.09",
+  "version": "2026.09.10",
   "model": "m1.0",
-  "notes": "Folder access has a role: the app detects whether this account can actually write to the shared folder and shows a read-only board when it cannot, instead of controls that save nothing the team can see."
+  "notes": "Three folder roles instead of two. A contributor can move a deal along the board — action required, in progress, done — without being able to add exports, save audits, or change which deals are tracked."
 }
