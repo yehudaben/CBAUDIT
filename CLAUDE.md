@@ -12,8 +12,12 @@ daily; a few colleagues may use the hosted copy.
 - **The whole app is `public/index.html`.** All CSS, all JS, all scoring logic.
   No build step, no framework, no dependencies at runtime.
 - All analysis is client-side. Report CSVs are read in the browser and never
-  uploaded. The only network call the page ever makes is fetching its own
-  `version.json` to detect a new deployment.
+  uploaded. With the filesystem backend the page makes exactly one network call
+  in its life — its own `version.json`. **The Drive backend changes that claim
+  and the claim must move with it**: it talks to `accounts.google.com` and
+  `www.googleapis.com`. No report data goes anywhere it was not already (it is
+  sitting in Google Drive), but "nothing leaves the browser" is only literally
+  true on the filesystem route. Do not let the README drift back.
 - Deployed on Cloudflare (Workers static assets) from this repo. A push to
   `main` is a deployment. Live at `cb.yehuda-ceb.workers.dev`.
 
@@ -242,6 +246,53 @@ update banner that never clears. `check.sh` enforces it.
 Cloudflare deploys on push. Users see the banner within 15 minutes or when they
 next focus the tab. Rollback: Cloudflare → Deployments → Rollback.
 
+## Two storage backends
+
+Added 2026.09.12. `FOLDER` owns the state machine, the role logic and the UI
+contract; a backend only moves bytes. The contract is nine methods:
+
+    connect  restore  grant  disconnect
+    listCsv  readTracker  writeTracker  writeAudit  auditExists  probe
+
+- **`FS_IO`** — File System Access API. Needs a real folder on disk, so in
+  practice a sync client, and Chromium. The original, and still the default.
+- **`DRIVE_IO`** — Google Drive REST. No sync client, no local folder, and it
+  works in Safari and Firefox, which could not share a tracker at all before.
+
+`FOLDER.scan()` does the parsing for both, so the two backends can never
+disagree about what a report is. `LS_BACKEND` remembers which one to restore.
+
+**Drive specifics that are easy to get wrong and are covered by tests:**
+
+- Every call must carry `supportsAllDrives=true`, and every list also
+  `includeItemsFromAllDrives=true` and `corpora=allDrives`. Without them a
+  shared-drive folder is simply invisible — the integration "works" against My
+  Drive and silently returns nothing. `test_drive.js` fakes a Drive that
+  enforces this and fails 12 assertions by name if it is dropped.
+- **Narrowing `fields` on `files.list` drops `nextPageToken`** unless it is
+  named explicitly, which silently truncates every result to one page.
+  `list()` prepends it. The fake serves 2 per page so this is exercised.
+- **`probe()` asks Drive rather than writing.** `capabilities.canAddChildren`
+  on the folder is exactly what the FS write-probe was approximating, so the
+  Drive route is authoritative, one request, and leaves no probe file behind.
+- **Scopes are `drive.readonly` + `drive.file`, not full `drive`.** `drive.file`
+  restricts writes to files this app created, which turns "one file per
+  browser, never touch anyone else's" from a convention into something Google
+  enforces. Both are restricted scopes; an **Internal** Workspace app skips
+  verification, which is the only reason this is practical.
+- `DRIVE_CLIENT_ID_BAKED` is empty in the repo, and an empty client ID hides
+  the Drive option entirely. A client ID is public, not a secret. Settings
+  carries an override so it can be tested without a redeploy.
+- `__driveInstall` hands DRIVE_IO a live token, which short-circuits `auth()`
+  so a test can stub `fetch` and drive the real code. Without a token every
+  call still goes through Google.
+
+**Unverified against the real API:** whether `drive.file` permits
+`files.create` with a `parents` reference to a folder the app did not create.
+It should, and the fake models it that way, but nobody has run it against
+Google. If a contributor's first tracker write returns 403, that is the reason
+and the fix is adding `drive` to the scope string.
+
 ## The tracker
 
 Which deals the team is acting on, and whether the action worked. Added
@@ -439,8 +490,10 @@ defences.
 - **Tracker clock skew.** Fold order is each machine's own timestamp, so a badly
   set clock reorders history. Every change shows its timestamp so it is
   spottable. Not solved.
-- **Tracker sharing is Chromium-only** — the folder API does not exist in Safari
-  or Firefox, so those browsers get a tracker that is private to that browser.
+- **Tracker sharing on the filesystem backend is Chromium-only** — the folder
+  API does not exist in Safari or Firefox. The Drive backend covers those, but
+  only once a client ID is configured; with none, those browsers still get a
+  tracker private to that browser.
 - **Bonus band asymmetry**: exactly 5.00% CB gets +3, not +6, because the high
   band is `> 5` while the mid band is `≥ 3`. That is the HIGH / ACT TODAY
   boundary, so it matters. Left as-is deliberately; ask before changing.

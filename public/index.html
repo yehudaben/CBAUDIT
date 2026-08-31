@@ -714,6 +714,17 @@ table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
 .robadge{font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   color:var(--ink2);background:var(--wash2);border:1px solid var(--axis);
   padding:1px 7px;border-radius:999px}
+.viabadge{font-size:var(--fs-xs);font-weight:600;color:var(--muted);
+  background:none;border:1px solid var(--axis);padding:1px 7px;border-radius:999px}
+/* the Drive connect conversation: sign-in, folder choice, paste-a-link */
+.dpanel{margin-top:10px;padding:11px 12px;background:var(--wash2);
+  border:1px solid var(--axis);border-radius:var(--r-sm);
+  display:flex;flex-direction:column;gap:9px}
+.dpmsg{font-size:var(--fs-sm);color:var(--ink2);line-height:1.5}
+.dpmsg.err{color:var(--gen-ink)}
+.dprow{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.dprow input{padding:5px 8px;border:1px solid var(--axis);border-radius:var(--r-sm);
+  background:var(--surface);color:var(--ink);font:inherit;font-size:var(--fs-sm)}
 .dsub{font-size:var(--fs-sm);color:var(--ink2);margin-top:2px;line-height:1.5}
 .dsub code{background:var(--wash2);padding:1px 5px;border-radius:4px;font-size:var(--fs-xs)}
 .dacts{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
@@ -837,7 +848,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.11";
+const APP_VERSION   = "2026.09.12";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1794,56 +1805,253 @@ async function idbDel(k){
   }catch(e){ return false; }
 }
 
+/* ============================================================
+   STORAGE BACKENDS
+
+   FOLDER owns the state machine, the role logic and the UI contract. A
+   backend only moves bytes. Two exist:
+
+     FS_IO      the File System Access API — a real folder on this disk,
+                which for most people means a Drive/Dropbox/OneDrive sync
+                client. Chromium only. This is the original and remains the
+                default for anyone who has the folder locally.
+     DRIVE_IO   the Google Drive REST API — no sync client, no local folder,
+                and it works in Safari and Firefox too.
+
+   Every backend implements exactly this surface and nothing else:
+
+     connect()            user gesture; establishes access, returns {name}
+     restore()            silent reconnect on load, returns {name} or null
+     grant()              user gesture; re-permission an existing connection
+     disconnect()
+     listCsv()            -> [{name, text, lastModified}]   raw, unparsed
+     readTracker()        -> [{name, text}]
+     writeTracker(n,t)
+     writeAudit(n,t)
+     auditExists(n)       -> bool
+     probe()              -> {root:bool, tracker:bool}
+
+   Parsing is deliberately NOT a backend concern: listCsv returns bytes and
+   FOLDER.scan() turns them into snapshots once, so both backends can never
+   disagree about what a report is.
+   ============================================================ */
+
+const FS_IO = {
+  kind:"fs",
+  label:"this computer",
+
+  /* The handle lives on FOLDER rather than here: it predates this split and
+     the test harness addresses it as FOLDER.handle. One property, one
+     owner — this reads it, nothing else does. */
+  h(){ return FOLDER.handle; },
+
+  async connect(){
+    if(!FS_OK) throw new Error("This browser cannot open a folder handle.");
+    const h = await window.showDirectoryPicker({mode:"readwrite", id:"cbrc-reports"});
+    FOLDER.handle = h;
+    await idbSet("dir", h);
+    return {name:h.name};
+  },
+  async restore(){
+    if(!FS_OK) return null;
+    const h = await idbGet("dir");
+    if(!h) return null;
+    FOLDER.handle = h;
+    let perm="prompt";
+    try{ perm = await h.queryPermission({mode:"readwrite"}); }catch(e){ perm="prompt"; }
+    return {name:h.name, granted: perm==="granted"};
+  },
+  async grant(){
+    const h = this.h();
+    if(!h) return false;
+    let perm="denied";
+    try{ perm = await h.requestPermission({mode:"readwrite"}); }catch(e){ perm="denied"; }
+    return perm==="granted";
+  },
+  async disconnect(){
+    FOLDER.handle = null;
+    await idbDel("dir");
+  },
+
+  async listCsv(){
+    const h = this.h(); if(!h) return [];
+    const out=[];
+    for await (const entry of h.values()){
+      if(entry.kind!=="file") continue;              /* audits/ and tracker/ are skipped here */
+      if(!/\.csv$/i.test(entry.name)) continue;
+      const f = await entry.getFile();
+      out.push({name:entry.name, text:await f.text(), lastModified:f.lastModified});
+    }
+    return out;
+  },
+
+  async dir(name, create){
+    const h = this.h();
+    if(!h) throw new Error("No folder connected.");
+    return h.getDirectoryHandle(name, {create:!!create});
+  },
+  async writeInto(dirName, name, text, mime){
+    const dir = await this.dir(dirName, true);
+    const fh  = await dir.getFileHandle(name, {create:true});
+    const w   = await fh.createWritable();
+    await w.write(new Blob([text],{type:mime}));
+    await w.close();
+    return name;
+  },
+
+  async readTracker(){
+    let dir;
+    try{ dir = await this.dir(FOLDER.TRACK_DIR, false); }
+    catch(e){ return []; }                       /* no tracker/ yet — not an error */
+    const files=[];
+    for await (const entry of dir.values()){
+      if(entry.kind!=="file" || !/\.jsonl$/i.test(entry.name)) continue;
+      try{
+        files.push({name:entry.name, text:await (await entry.getFile()).text()});
+      }catch(e){ /* a half-synced file: skip it, the next read picks it up */ }
+    }
+    return files;
+  },
+  writeTracker(name, text){
+    return this.writeInto(FOLDER.TRACK_DIR, name, text, "application/x-ndjson");
+  },
+  writeAudit(name, text){
+    return this.writeInto(FOLDER.AUDIT_DIR, name, text, "text/csv");
+  },
+  async auditExists(name){
+    try{ await this.h().getFileHandle(name, {create:false}); return true; }
+    catch(e){ return false; }
+  },
+
+  /* The only honest test of a synced drive is to write to it: Drive, Dropbox
+     and OneDrive all hand out a directory handle for a folder they will then
+     refuse to modify, so a granted browser permission proves nothing. */
+  async _probeDir(dir){
+    let ok = false;
+    try{
+      const fh = await dir.getFileHandle(FOLDER.PROBE, {create:true});
+      const w  = await fh.createWritable();
+      await w.write(new Blob([""]));
+      await w.close();
+      ok = true;
+    }catch(e){ ok = false; }
+    try{ await dir.removeEntry(FOLDER.PROBE); }catch(e){}
+    return ok;
+  },
+  async probe(){
+    const h = this.h();
+    if(!h) return {root:null, tracker:null};
+    const root = await this._probeDir(h);
+    /* tracker/ can be writable when the root is not. If it does not exist yet
+       only someone who can write the root could create it, so the root's own
+       answer is the honest one. */
+    let td = null;
+    try{ td = await this.dir(FOLDER.TRACK_DIR, false); }catch(e){ td = null; }
+    return {root, tracker: td ? await this._probeDir(td) : root};
+  }
+};
+
 const FOLDER = {
   handle:null, name:null, state:"none", found:0, skipped:[],
+  io: FS_IO,
 
   /* audits are written into <folder>/audits/ so the tool never reads its
      own output back in as a report, and the source folder stays exactly
      as the portal left it */
   AUDIT_DIR: "audits",
-  async auditDir(){
-    if(!this.handle) throw new Error("No folder connected.");
-    return this.handle.getDirectoryHandle(this.AUDIT_DIR, {create:true});
-  },
+  TRACK_DIR: "tracker",
 
-  async pick(){
-    if(!FS_OK) throw new Error("This browser cannot open a folder handle.");
-    const h = await window.showDirectoryPicker({mode:"readwrite", id:"cbrc-reports"});
-    this.handle=h; this.name=h.name; this.state="connected";
-    await idbSet("dir", h);
+  backend(){ return this.io ? this.io.kind : "fs"; },
+  isDrive(){ return this.backend()==="drive"; },
+
+  async pick(opts){
+    const io = (opts && opts.via==="drive") ? DRIVE_IO : FS_IO;
+    const r = await io.connect(opts);
+    this.io = io; this.name = r.name; this.state = "connected";
+    try{ localStorage.setItem(this.LS_BACKEND, io.kind); }catch(e){}
     await this.probe();
-    return h;
+    return r;
   },
   async restore(){
-    if(!FS_OK) return false;
-    const h = await idbGet("dir");
-    if(!h) return false;
-    this.handle=h; this.name=h.name;
-    let perm="prompt";
-    try{ perm = await h.queryPermission({mode:"readwrite"}); }catch(e){ perm="prompt"; }
-    this.state = perm==="granted" ? "connected" : "needs-permission";
+    let want = FS_IO;
+    try{ if(localStorage.getItem(this.LS_BACKEND)==="drive") want = DRIVE_IO; }catch(e){}
+    const r = await want.restore();
+    if(!r) return false;
+    this.io = want; this.name = r.name;
+    this.state = r.granted ? "connected" : "needs-permission";
     if(this.state==="connected") await this.probe();
     return true;
   },
   async grant(){
-    if(!this.handle) return false;
-    let perm="denied";
-    try{ perm = await this.handle.requestPermission({mode:"readwrite"}); }catch(e){ perm="denied"; }
-    this.state = perm==="granted" ? "connected" : "needs-permission";
-    if(this.state==="connected") await this.probe();
-    return this.state==="connected";
+    const ok = await this.io.grant();
+    this.state = ok ? "connected" : "needs-permission";
+    if(ok) await this.probe();
+    return ok;
   },
   async disconnect(){
-    this.handle=null; this.name=null; this.state="none"; this.found=0; this.skipped=[];
-    this.writable=null;
+    try{ await this.io.disconnect(); }catch(e){}
+    this.io = FS_IO;
+    this.name=null; this.state="none"; this.found=0; this.skipped=[];
+    this.access = {root:null, tracker:null};
+    try{ localStorage.removeItem(this.LS_BACKEND); }catch(e){}
     await idbDel("dir");
+  },
+
+  /* read every portal export in the folder, whichever backend holds it.
+     Our own audit files are ignored even if one is sitting loose in the
+     source folder. */
+  async scan(){
+    if(this.state!=="connected") return [];
+    const out=[], skipped=[];
+    let raw=[];
+    try{ raw = await this.io.listCsv(); }
+    catch(e){ this.found=0; this.skipped=[String(e.message||e)]; return []; }
+    raw.forEach(f=>{
+      try{
+        const snap = loadSnapshot(f.text, f.name);
+        if(snap.dateOnly && f.lastModified){
+          const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
+          snap.stamp = snap.stamp.slice(0,10)
+            + ` ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+        if(!snap.stamp && f.lastModified){
+          const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
+          snap.stamp = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} `
+                     + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+        }
+        out.push(snap);
+      }catch(e){
+        if(e && e.isAudit) return;                   /* our own output — ignore */
+        skipped.push(f.name+": "+(e.message||e));
+      }
+    });
+    this.found=out.length; this.skipped=skipped;
+    return out;
+  },
+
+  async writeFile(name, text){
+    if(this.state!=="connected") throw new Error("No folder connected.");
+    if(!this.canWrite()) throw new Error("This folder is read-only for you.");
+    return this.io.writeAudit(name, text);
+  },
+  async auditExists(name){
+    try{ return await this.io.auditExists(name); }catch(e){ return false; }
+  },
+  async readTracker(){
+    if(this.state!=="connected") return [];
+    try{ return await this.io.readTracker(); }catch(e){ return []; }
+  },
+  async writeTracker(name, text){
+    if(this.state!=="connected") throw new Error("No folder connected.");
+    if(!this.canTrackWrite()) throw new Error("This folder is read-only for you.");
+    return this.io.writeTracker(name, text);
   },
 
   /* ---- what this browser may do to the folder ----
      This enforces nothing and must never be mistaken for enforcement: it is
-     client-side JavaScript reading a folder the operating system has already
-     decided this account may or may not write. The shared drive is the gate.
-     What this buys is honesty. Without it a viewer's clicks land in
+     client-side JavaScript reading a folder the operating system — or Google —
+     has already decided this account may or may not write. The shared drive is
+     the gate. What this buys is honesty. Without it a viewer's clicks land in
      localStorage, fold into their own board, and look exactly like a change
      the team can see — while reaching nobody. Read-only has to look
      read-only.
@@ -1852,18 +2060,18 @@ const FOLDER = {
      folders that matter can carry different permissions:
 
        owner        root writable          everything
-       contributor  tracker/ only          move a status, nothing else
+       contributor  tracker/ only          add and edit, never remove
        viewer       neither                read
 
      That middle row is the whole point. On a Google shared drive a folder can
      be shared to grant MORE access than the member holds at drive level (never
-     less), so a team of Viewers can be given Contributor on tracker/ alone:
-     they can move a deal to In progress and cannot add an export, save an
-     audit, or delete anything. Two probes, one per folder, is what reads that
-     apart — no single writable/not-writable flag can. */
-  LS_ROLE: "cbrc.folder.role",           /* "auto" | "contributor" | "viewer" */
-  PROBE:   ".cbrc-access-check",
-  access:  {root:null, tracker:null},    /* null = not probed yet */
+     less), so a team of Viewers can be given Contributor on tracker/ alone.
+     Two probes, one per folder, is what reads that apart — no single
+     writable/not-writable flag can. */
+  LS_ROLE:    "cbrc.folder.role",        /* "auto" | "contributor" | "viewer" */
+  LS_BACKEND: "cbrc.folder.backend",     /* "fs" | "drive" */
+  PROBE:      ".cbrc-access-check",
+  access:     {root:null, tracker:null}, /* null = not probed yet */
 
   ROLE_RANK: {viewer:0, contributor:1, owner:2},
 
@@ -1877,37 +2085,10 @@ const FOLDER = {
     try{ localStorage.setItem(this.LS_ROLE, ok); }catch(e){}
   },
 
-  /* The only honest test of a synced drive is to write to it. Drive, Dropbox
-     and OneDrive all hand out a directory handle for a folder they will then
-     refuse to modify, so a granted browser permission proves nothing at all.
-     The probe is a dot-file and is invisible to both scan() (.csv only) and
-     readTracker() (.jsonl only), so a stranded one can never be read as data
-     — and it will strand sometimes: a Contributor may create a file and not
-     be allowed to delete it. */
-  async _probeDir(dir){
-    let ok = false;
-    try{
-      const fh = await dir.getFileHandle(this.PROBE, {create:true});
-      const w  = await fh.createWritable();
-      await w.write(new Blob([""]));
-      await w.close();
-      ok = true;
-    }catch(e){ ok = false; }
-    try{ await dir.removeEntry(this.PROBE); }catch(e){}
-    return ok;
-  },
   async probe(){
-    if(!this.handle || this.state!=="connected"){
-      this.access = {root:null, tracker:null}; return null;
-    }
-    const root = await this._probeDir(this.handle);
-    /* tracker/ can be writable when the root is not. If it does not exist yet
-       only someone who can write the root could create it, so the root's own
-       answer is the honest one. */
-    let td = null;
-    try{ td = await this.trackDir(false); }catch(e){ td = null; }
-    const tracker = td ? await this._probeDir(td) : root;
-    this.access = {root, tracker};
+    if(this.state!=="connected"){ this.access = {root:null, tracker:null}; return null; }
+    try{ this.access = await this.io.probe(); }
+    catch(e){ this.access = {root:null, tracker:null}; }
     return this.role();
   },
 
@@ -1935,82 +2116,351 @@ const FOLDER = {
   canTrackWrite(){ return this.role()!=="viewer"; },    /* tracker/ at all */
   canManageTracker(){ return this.role()==="owner"; },  /* add, remove, retarget */
   isViewer(){ return this.role()==="viewer"; },
-  isContributor(){ return this.role()==="contributor"; },
+  isContributor(){ return this.role()==="contributor"; }
+};
 
-  /* read every portal export in the folder. Subdirectories (including
-     audits/) are skipped, and our own audit files are ignored even if one
-     is sitting loose in the source folder. */
-  async scan(){
-    if(!this.handle || this.state!=="connected") return [];
-    const out=[], skipped=[];
-    for await (const entry of this.handle.values()){
-      if(entry.kind!=="file") continue;
-      if(!/\.csv$/i.test(entry.name)) continue;
-      try{
-        const f = await entry.getFile();
-        const text = await f.text();
-        const snap = loadSnapshot(text, entry.name);
-        if(snap.dateOnly && f.lastModified){
-          const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
-          snap.stamp = snap.stamp.slice(0,10)
-            + ` ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+/* ------------------------------------------------------------
+   DRIVE_IO — the same folder, reached over HTTPS instead of the disk.
+
+   Why it exists: FS_IO needs a real folder on the machine, which means a
+   sync client (Drive for Desktop, Dropbox, OneDrive) and a Chromium
+   browser. This needs neither, so a teammate can work the tracker from a
+   plain browser on any machine — Safari and Firefox included.
+
+   Scopes are deliberately narrow, and the narrowness does real work:
+
+     drive.readonly  read the exports, the audits and everyone's tracker files
+     drive.file      write ONLY files this app created
+
+   drive.file is what makes "one file per browser, never touch anyone
+   else's" an enforced fact rather than a convention — Google refuses the
+   write even if a bug here asked for it.
+
+   Both are "restricted" scopes, which normally means Google verification.
+   An app published as Internal to a Workspace domain skips that entirely,
+   which is why this is only offered to @paymenthelp.com accounts.
+
+   Permission is NOT re-implemented here. Drive enforces the same shared
+   drive roles the filesystem does; probe() just asks Drive what this
+   account may do, which is more honest than the FS probe and leaves
+   nothing behind.
+   ------------------------------------------------------------ */
+
+const DRIVE_API   = "https://www.googleapis.com/drive/v3";
+const DRIVE_UP    = "https://www.googleapis.com/upload/drive/v3";
+const DRIVE_GIS   = "https://accounts.google.com/gsi/client";
+/* An OAuth client ID is public, not a secret — it is safe in this file.
+   Empty means the Drive option is hidden entirely. Settings can override it
+   for testing without a redeploy. */
+const DRIVE_CLIENT_ID_BAKED = "";
+
+const DRIVE_IO = {
+  kind:"drive",
+  label:"Google Drive",
+  SCOPES:"https://www.googleapis.com/auth/drive.readonly "
+        +"https://www.googleapis.com/auth/drive.file",
+
+  LS_FOLDER:"cbrc.drive.folder",     /* {id,name} of the connected folder */
+  LS_CLIENT:"cbrc.drive.client",     /* optional client-ID override */
+
+  token:null, tokenExp:0, gis:null,
+  folderId:null, folderName:null,
+  sub:{audits:null, tracker:null},   /* resolved child folder ids */
+
+  clientId(){
+    let v=null;
+    try{ v = localStorage.getItem(this.LS_CLIENT); }catch(e){}
+    return (v && v.trim()) || DRIVE_CLIENT_ID_BAKED;
+  },
+  setClientId(v){
+    try{
+      if(v && v.trim()) localStorage.setItem(this.LS_CLIENT, v.trim());
+      else localStorage.removeItem(this.LS_CLIENT);
+    }catch(e){}
+  },
+  available(){ return !!this.clientId(); },
+
+  /* ---- auth ---- */
+  loadGis(){
+    if(this.gis) return this.gis;
+    this.gis = new Promise((resolve,reject)=>{
+      if(window.google && google.accounts && google.accounts.oauth2) return resolve();
+      const s=document.createElement("script");
+      s.src=DRIVE_GIS; s.async=true; s.defer=true;
+      s.onload=()=>resolve();
+      s.onerror=()=>reject(new Error("Could not load Google sign-in. Check the network."));
+      document.head.appendChild(s);
+    });
+    return this.gis;
+  },
+
+  /* interactive=false is the silent path used on page load: it succeeds only
+     when this browser already has a live Google session and prior consent,
+     and otherwise fails quietly into the same "needs-permission" state the
+     filesystem backend uses. One click puts it right. */
+  async auth(interactive){
+    if(this.token && Date.now() < this.tokenExp - 60000) return this.token;
+    const cid = this.clientId();
+    if(!cid) throw new Error("No Google client ID is configured for this build.");
+    await this.loadGis();
+    return new Promise((resolve,reject)=>{
+      let done=false;
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: cid,
+        scope: this.SCOPES,
+        callback: r=>{
+          if(done) return; done=true;
+          if(r && r.access_token){
+            this.token = r.access_token;
+            this.tokenExp = Date.now() + ((+r.expires_in || 3600) * 1000);
+            resolve(this.token);
+          } else reject(new Error(
+            (r && (r.error_description || r.error)) || "Google did not return a token."));
+        },
+        error_callback: err=>{
+          if(done) return; done=true;
+          const t = err && err.type;
+          reject(new Error(
+            t==="popup_closed"  ? "Sign-in window was closed before finishing." :
+            t==="popup_failed_to_open" ? "The sign-in popup was blocked. Allow popups for this site." :
+            (err && err.message) || "Sign-in did not complete."));
         }
-        if(!snap.stamp && f.lastModified){
-          const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
-          snap.stamp = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} `
-                     + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-        }
-        out.push(snap);
-      }catch(e){
-        if(e && e.isAudit) continue;                 /* our own output — ignore */
-        skipped.push(entry.name+": "+(e.message||e));
-      }
+      });
+      try{ client.requestAccessToken({prompt: interactive ? "" : "none"}); }
+      catch(e){ if(!done){ done=true; reject(e); } }
+    });
+  },
+
+  /* ---- REST ---- */
+  async api(url, opts, retry){
+    const o = Object.assign({}, opts||{});
+    o.headers = Object.assign({}, o.headers||{}, {Authorization:"Bearer "+this.token});
+    const r = await fetch(url, o);
+    if(r.status===401 && !retry){
+      this.token=null; this.tokenExp=0;
+      await this.auth(false).catch(()=>this.auth(true));
+      return this.api(url, opts, true);
     }
-    this.found=out.length; this.skipped=skipped;
+    if(!r.ok){
+      let msg = r.status+" "+r.statusText;
+      try{ const j = await r.json(); if(j && j.error && j.error.message) msg = j.error.message; }
+      catch(e){}
+      const err = new Error(msg); err.status = r.status; throw err;
+    }
+    return r;
+  },
+  /* every call has to opt in to shared drives explicitly or the folder is
+     invisible — this is the single most common way a Drive integration
+     "works" against My Drive and silently sees nothing in a team drive */
+  q(params){
+    const p = Object.assign({supportsAllDrives:"true"}, params);
+    return Object.keys(p).map(k=>encodeURIComponent(k)+"="+encodeURIComponent(p[k])).join("&");
+  },
+  async json(url){ return (await this.api(url)).json(); },
+
+  async list(params){
+    const p = Object.assign({
+      includeItemsFromAllDrives:"true", corpora:"allDrives", pageSize:"200",
+      fields:"files(id,name,mimeType,modifiedTime)"
+    }, params);
+    /* narrowing `fields` on a list call drops nextPageToken unless it is asked
+       for by name, and the loop then silently stops after one page */
+    if(p.fields.indexOf("nextPageToken")<0) p.fields = "nextPageToken,"+p.fields;
+    const out=[]; let token=null;
+    do{
+      const q = Object.assign({}, p);
+      if(token) q.pageToken = token;
+      const j = await this.json(DRIVE_API+"/files?"+this.q(q));
+      (j.files||[]).forEach(f=>out.push(f));
+      token = j.nextPageToken || null;
+    } while(token && out.length < 2000);
     return out;
   },
-  async writeFile(name, text){
-    if(!this.handle || this.state!=="connected") throw new Error("No folder connected.");
-    if(!this.canWrite()) throw new Error("This folder is read-only for you.");
-    const dir = await this.auditDir();
-    const fh = await dir.getFileHandle(name, {create:true});
-    const w = await fh.createWritable();
-    await w.write(new Blob([text],{type:"text/csv"}));
-    await w.close();
-    return name;
+  async download(id){
+    const r = await this.api(DRIVE_API+"/files/"+encodeURIComponent(id)+"?"+this.q({alt:"media"}));
+    return r.text();
   },
 
-  /* tracker state lives in its own subfolder. scan() skips directories, so
-     nothing in here can ever be read back as a portal export. */
-  TRACK_DIR: "tracker",
-  async trackDir(create){
-    if(!this.handle) throw new Error("No folder connected.");
-    return this.handle.getDirectoryHandle(this.TRACK_DIR, {create:!!create});
+  FOLDER_MIME:"application/vnd.google-apps.folder",
+
+  async childFolder(parentId, name, create){
+    const hit = await this.list({
+      q:`'${parentId}' in parents and name='${name.replace(/'/g,"\\'")}' `
+       +`and mimeType='${this.FOLDER_MIME}' and trashed=false`
+    });
+    if(hit.length) return hit[0].id;
+    if(!create) return null;
+    const r = await this.api(DRIVE_API+"/files?"+this.q({fields:"id"}), {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name, mimeType:this.FOLDER_MIME, parents:[parentId]})
+    });
+    return (await r.json()).id;
+  },
+
+  /* ---- connect ---- */
+  /* Finds folders this account can see by name, across every shared drive.
+     Used to offer a one-click connect instead of making people paste ids. */
+  async findFolders(name){
+    return this.list({
+      q:`name='${name.replace(/'/g,"\\'")}' and mimeType='${this.FOLDER_MIME}' and trashed=false`,
+      fields:"files(id,name,driveId)"
+    });
+  },
+  /* accepts a raw id or any Drive URL containing /folders/<id> */
+  parseId(s){
+    if(!s) return null;
+    const m = String(s).match(/\/folders\/([A-Za-z0-9_-]{10,})/);
+    if(m) return m[1];
+    const t = String(s).trim();
+    return /^[A-Za-z0-9_-]{10,}$/.test(t) ? t : null;
+  },
+
+  async useFolder(id){
+    const f = await this.json(DRIVE_API+"/files/"+encodeURIComponent(id)+"?"
+                + this.q({fields:"id,name,mimeType,capabilities(canAddChildren,canEdit)"}));
+    if(f.mimeType !== this.FOLDER_MIME) throw new Error("That is a file, not a folder.");
+    this.folderId=f.id; this.folderName=f.name;
+    this.sub={audits:null, tracker:null};
+    this._caps = f.capabilities || {};
+    try{ localStorage.setItem(this.LS_FOLDER, JSON.stringify({id:f.id, name:f.name})); }catch(e){}
+    return {name:f.name};
+  },
+
+  async connect(opts){
+    await this.auth(true);
+    const given = this.parseId(opts && opts.folder);
+    if(given) return this.useFolder(given);
+    const hits = await this.findFolders((opts && opts.name) || "CB Audit Location");
+    if(hits.length===1) return this.useFolder(hits[0].id);
+    if(!hits.length) throw new Error(
+      "No folder named “CB Audit Location” is shared with this account. "
+      +"Paste the folder link instead, or ask for access.");
+    const e = new Error("Several folders match that name — choose one.");
+    e.choices = hits.map(h=>({id:h.id, name:h.name}));
+    throw e;
+  },
+  async restore(){
+    if(!this.available()) return null;
+    let saved=null;
+    try{ saved = JSON.parse(localStorage.getItem(this.LS_FOLDER)||"null"); }catch(e){}
+    if(!saved || !saved.id) return null;
+    this.folderId = saved.id; this.folderName = saved.name;
+    try{
+      await this.auth(false);
+      await this.useFolder(saved.id);
+      return {name:this.folderName, granted:true};
+    }catch(e){
+      return {name:saved.name, granted:false};   /* one click away, same as FS */
+    }
+  },
+  async grant(){
+    try{
+      await this.auth(true);
+      if(this.folderId) await this.useFolder(this.folderId);
+      return true;
+    }catch(e){ return false; }
+  },
+  async disconnect(){
+    this.token=null; this.tokenExp=0; this.folderId=null; this.folderName=null;
+    this.sub={audits:null, tracker:null};
+    try{ localStorage.removeItem(this.LS_FOLDER); }catch(e){}
+  },
+
+  /* ---- reads ---- */
+  async listCsv(){
+    if(!this.folderId) return [];
+    const files = await this.list({
+      q:`'${this.folderId}' in parents and trashed=false and mimeType!='${this.FOLDER_MIME}'`,
+      fields:"files(id,name,modifiedTime)"
+    });
+    const csv = files.filter(f=>/\.csv$/i.test(f.name));
+    const out=[];
+    for(const f of csv){
+      out.push({name:f.name, text:await this.download(f.id),
+                lastModified: f.modifiedTime ? Date.parse(f.modifiedTime) : 0});
+    }
+    return out;
   },
   async readTracker(){
-    if(!this.handle || this.state!=="connected") return [];
-    let dir;
-    try{ dir = await this.trackDir(false); }
-    catch(e){ return []; }                       /* no tracker/ yet — not an error */
-    const files=[];
-    for await (const entry of dir.values()){
-      if(entry.kind!=="file" || !/\.jsonl$/i.test(entry.name)) continue;
-      try{
-        const text = await (await entry.getFile()).text();
-        files.push({name:entry.name, text});
-      }catch(e){ /* a half-synced file: skip it, the next read picks it up */ }
+    if(!this.folderId) return [];
+    const t = this.sub.tracker || (this.sub.tracker = await this.childFolder(
+      this.folderId, FOLDER.TRACK_DIR, false));
+    if(!t) return [];
+    const files = await this.list({
+      q:`'${t}' in parents and trashed=false`, fields:"files(id,name)"
+    });
+    const out=[];
+    for(const f of files.filter(f=>/\.jsonl$/i.test(f.name))){
+      try{ out.push({name:f.name, text:await this.download(f.id)}); }
+      catch(e){ /* mid-write: the next read picks it up */ }
     }
-    return files;
+    return out;
+  },
+
+  /* ---- writes ---- */
+  async upsert(parentId, name, text, mime){
+    const hit = await this.list({
+      q:`'${parentId}' in parents and name='${name.replace(/'/g,"\\'")}' and trashed=false`,
+      fields:"files(id,name)"
+    });
+    if(hit.length){
+      await this.api(DRIVE_UP+"/files/"+encodeURIComponent(hit[0].id)+"?"
+        + this.q({uploadType:"media"}),
+        {method:"PATCH", headers:{"Content-Type":mime}, body:text});
+      return name;
+    }
+    const boundary = "cbrc"+String(text.length)+"x"+name.length;
+    const body =
+      "--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
+      + JSON.stringify({name, parents:[parentId]})
+      + "\r\n--"+boundary+"\r\nContent-Type: "+mime+"\r\n\r\n"
+      + text + "\r\n--"+boundary+"--";
+    await this.api(DRIVE_UP+"/files?"+this.q({uploadType:"multipart",fields:"id"}), {
+      method:"POST",
+      headers:{"Content-Type":"multipart/related; boundary="+boundary},
+      body
+    });
+    return name;
   },
   async writeTracker(name, text){
-    if(!this.handle || this.state!=="connected") throw new Error("No folder connected.");
-    if(!this.canTrackWrite()) throw new Error("This folder is read-only for you.");
-    const dir = await this.trackDir(true);
-    const fh = await dir.getFileHandle(name, {create:true});
-    const w = await fh.createWritable();
-    await w.write(new Blob([text],{type:"application/x-ndjson"}));
-    await w.close();
-    return name;
+    const t = this.sub.tracker
+          || (this.sub.tracker = await this.childFolder(this.folderId, FOLDER.TRACK_DIR, true));
+    return this.upsert(t, name, text, "application/x-ndjson");
+  },
+  async writeAudit(name, text){
+    const a = this.sub.audits
+          || (this.sub.audits = await this.childFolder(this.folderId, FOLDER.AUDIT_DIR, true));
+    return this.upsert(a, name, text, "text/csv");
+  },
+  async auditExists(name){
+    const a = this.sub.audits
+          || (this.sub.audits = await this.childFolder(this.folderId, FOLDER.AUDIT_DIR, false));
+    if(!a) return false;
+    const hit = await this.list({
+      q:`'${a}' in parents and name='${name.replace(/'/g,"\\'")}' and trashed=false`,
+      fields:"files(id)"
+    });
+    return !!hit.length;
+  },
+
+  /* ---- permission ----
+     Drive will simply tell us, which beats the filesystem probe on every
+     count: it is authoritative, it is one request, and it writes nothing.
+     canAddChildren on a folder is the exact analogue of "the write probe
+     succeeded" — it is what the shared drive role actually grants. */
+  async probe(){
+    if(!this.folderId) return {root:null, tracker:null};
+    const root = await this.json(DRIVE_API+"/files/"+encodeURIComponent(this.folderId)+"?"
+      + this.q({fields:"capabilities(canAddChildren)"}));
+    const rootOk = !!(root.capabilities && root.capabilities.canAddChildren);
+    let t = this.sub.tracker;
+    if(t === null || t === undefined)
+      t = this.sub.tracker = await this.childFolder(this.folderId, FOLDER.TRACK_DIR, false);
+    if(!t) return {root:rootOk, tracker:rootOk};
+    const tr = await this.json(DRIVE_API+"/files/"+encodeURIComponent(t)+"?"
+      + this.q({fields:"capabilities(canAddChildren)"}));
+    return {root:rootOk, tracker: !!(tr.capabilities && tr.capabilities.canAddChildren)};
   }
 };
 
@@ -2325,6 +2775,33 @@ const TRACKER = {
 function newestSnap(){
   return LIB.length ? LIB[0] : null;                 // LIB is sorted newest-first
 }
+/* Connecting over the Drive API is a conversation, not one click: sign in,
+   then find the folder. Almost always it resolves by name on the first try;
+   this state exists for the two cases where it cannot — several folders share
+   the name, or none is shared with this account. */
+const DCONN = {open:false, busy:false, err:null, choices:null};
+
+function driveBtnHTML(primary){
+  if(!DRIVE_IO.available()) return "";
+  return `<button class="btn${primary?" p big":""}" id="btnDrive">Connect Google Drive</button>`;
+}
+function drivePanelHTML(){
+  if(!DCONN.open) return "";
+  const rows = (DCONN.choices||[]).map(c=>
+    `<button class="btn sm dchoice" data-fid="${esc(c.id)}">${esc(c.name)}</button>`).join(" ");
+  return `<div class="dpanel">
+    ${DCONN.busy ? `<div class="dpmsg">Talking to Google…</div>` : ""}
+    ${DCONN.err ? `<div class="dpmsg err">${esc(DCONN.err)}</div>` : ""}
+    ${rows ? `<div class="dpmsg">More than one folder has that name — pick yours:</div>
+              <div class="dprow">${rows}</div>` : ""}
+    <div class="dprow">
+      <input type="text" id="dFolderLink" placeholder="…or paste the folder link from Drive"
+        style="flex:1;min-width:220px">
+      <button class="btn sm" id="btnDriveLink">Use this link</button>
+    </div>
+  </div>`;
+}
+
 function dataStripHTML(){
   const n = LIB.length;
   const newest = newestSnap();
@@ -2342,13 +2819,19 @@ function dataStripHTML(){
 
   /* ---- state 1: nothing set up yet ---- */
   if(!FS_OK && !n){
+    const drive = DRIVE_IO.available();
     return `<div class="data setup"><div class="drow">
       <span class="dicon">&#128193;</span>
       <div class="dmain"><div class="dtitle">Load your portal exports</div>
-        <div class="dsub">This browser cannot keep a folder connected, so open a folder of exports
-          or drop the files in. Chrome or Edge can remember the folder between visits.</div></div>
-      <div class="dacts"><button class="btn p big" id="btnDirFallback">Open a folder</button>
+        <div class="dsub">${drive
+          ? `This browser cannot open a folder from the disk, but it can reach the shared folder
+             through Google Drive — sign in and everything works, tracker included.`
+          : `This browser cannot keep a folder connected, so open a folder of exports
+             or drop the files in. Chrome or Edge can remember the folder between visits.`}</div></div>
+      <div class="dacts">${driveBtnHTML(true)}
+        <button class="btn" id="btnDirFallback">Open a folder</button>
         <button class="btn" id="btnPickFiles">Choose files</button></div></div>
+      ${drivePanelHTML()}
       <div class="dhint">Or drag CSV files anywhere on this page.</div></div>`;
   }
   if(FOLDER.state==="none" && !n){
@@ -2356,16 +2839,21 @@ function dataStripHTML(){
       <span class="dicon">&#128193;</span>
       <div class="dmain"><div class="dtitle">Point this at your reports folder</div>
         <div class="dsub">Exports in, audits out. Chosen once and remembered.</div></div>
-      <div class="dacts"><button class="btn p big" id="btnConnect">Choose folder</button></div>
+      <div class="dacts"><button class="btn p big" id="btnConnect">Choose folder</button>
+        ${driveBtnHTML(false)}</div>
       </div>
+      ${drivePanelHTML()}
       <ol class="steps">
         <li>Download the report from the portal with the green download icon.</li>
         <li>Save it into <b>one folder</b> you keep for this — the filename already carries the date.</li>
         <li>Choose that folder here. Every export in it becomes a tab, and audits you save go to
             <code>audits/</code> inside it.</li>
       </ol>
-      <div class="dhint">Prefer not to connect a folder? Drag CSV files anywhere on this page —
-        they are kept for this browser session only.</div></div>`;
+      <div class="dhint">${DRIVE_IO.available()
+        ? `No Google Drive app on this machine? <b>Connect Google Drive</b> reaches the same folder
+           over the web — no sync client, and it works in Safari and Firefox.`
+        : `Prefer not to connect a folder? Drag CSV files anywhere on this page —
+           they are kept for this browser session only.`}</div></div>`;
   }
 
   /* ---- state 2: folder remembered, awaiting the once-per-visit click ---- */
@@ -2398,6 +2886,7 @@ function dataStripHTML(){
       <span class="dicon">&#128193;</span>
       <div class="dmain">
         <div class="dtitle"><span class="dot ${owner?"on":"ro"}"></span>${esc(FOLDER.name)}
+          ${FOLDER.isDrive()?`<span class="viabadge">via Google Drive</span>`:""}
           ${badge?`<span class="robadge">${badge}</span>`:""}
           <span class="sub" style="font-weight:400;color:var(--muted);font-size:var(--fs-sm)">
             ${FOLDER.found} export${FOLDER.found===1?"":"s"}${ns?` · newest ${esc(ns.full)}`:""}</span>
@@ -2433,6 +2922,19 @@ function renderDataStrip(){
   el.innerHTML = dataStripHTML();
   const on=(id,fn)=>{const b=$(id); if(b) b.onclick=fn;};
   on("#btnConnect", connectFolder);
+  on("#btnDrive", ()=>{
+    if(DCONN.open && !DCONN.err && !DCONN.choices){ DCONN.open=false; renderDataStrip(); return; }
+    connectDrive();
+  });
+  on("#btnDriveLink", ()=>{
+    const el=$("#dFolderLink");
+    const v=el && el.value.trim();
+    if(!v){ DCONN.err="Paste the folder link from Drive first."; renderDataStrip(); return; }
+    connectDrive({folder:v});
+  });
+  document.querySelectorAll(".dchoice").forEach(b=>{
+    b.onclick = ()=> connectDrive({folder:b.getAttribute("data-fid")});
+  });
   on("#btnRescan", loadFromFolder);
   on("#btnSaveFolder", saveCurrentToFolder);
   on("#btnPickFiles", ()=>$("#fileA").click());
@@ -2460,6 +2962,27 @@ function renderDataStrip(){
 }
 
 function folderMode(){ return FOLDER.state==="connected"; }
+
+/* Sign in, then resolve the folder. Errors are shown in the panel rather than
+   thrown away, because every one of them is actionable by the person reading:
+   popup blocked, wrong account, folder not shared, name ambiguous. */
+async function connectDrive(opts){
+  DCONN.open=true; DCONN.busy=true; DCONN.err=null; DCONN.choices=null;
+  renderDataStrip();
+  try{
+    await FOLDER.pick(Object.assign({via:"drive"}, opts||{}));
+    DCONN.open=false; DCONN.busy=false; DCONN.err=null; DCONN.choices=null;
+    renderDataStrip();
+    await loadFromFolder();
+    await TRACKER.sync();
+    render();
+  }catch(e){
+    DCONN.busy=false;
+    DCONN.err = e.message || String(e);
+    DCONN.choices = e.choices || null;
+    renderDataStrip();
+  }
+}
 
 async function loadFromFolder(){
   const snaps = await FOLDER.scan();
@@ -2501,8 +3024,7 @@ async function saveCurrentToFolder(){
   const name = auditFileName();
   let existed = false;
   try{
-    await FOLDER.handle.getFileHandle(name, {create:false});
-    existed = true;
+    existed = await FOLDER.auditExists(name);
   }catch(e){ existed = false; }          /* NotFoundError = new file */
   try{
     await FOLDER.writeFile(name, "﻿"+toCSV(set));
@@ -3093,7 +3615,10 @@ function folderAccessHTML(){
     .filter(v=> v==="auto" || FOLDER.ROLE_RANK[v] < FOLDER.ROLE_RANK[det])
     .map(v=>`<option value="${v}"${v===pref?" selected":""}>${
       v==="auto" ? "Match the folder" : "Stay "+v}</option>`).join("");
-  return `<div class="setrow">Detected: <b>${seen}</b>
+  const via = !conn ? "" : (FOLDER.isDrive() ? "Google Drive (no sync client)"
+                                             : "a folder on this computer");
+  return `${conn?`<div class="setrow">Reaching the folder through <b>${esc(via)}</b></div>`:""}
+    <div class="setrow">Detected: <b>${seen}</b>
       ${conn?`<button class="btn sm" id="btnRoleProbe">Re-check</button>`:""}</div>
     <div class="setrow">This browser acts as
       <select id="roleSel" class="trkact">${opts}</select>
@@ -3101,7 +3626,18 @@ function folderAccessHTML(){
     <div class="setrow"><span class="out">Who may write is decided by the shared drive, not here.
       This page only matches it, so a restricted browser gets a board it can actually act on
       instead of buttons that save nothing anyone else will ever see. The menu can only narrow
-      what the folder already allows.</span></div>`;
+      what the folder already allows.</span></div>
+    <div class="setrow" style="margin-top:12px">Google OAuth client ID
+      <input type="text" id="driveClient" spellcheck="false"
+        value="${esc(DRIVE_IO.clientId())}"
+        placeholder="…apps.googleusercontent.com"
+        style="flex:1;min-width:240px;padding:5px 8px;border:1px solid var(--axis);
+               border-radius:var(--r-sm);background:var(--surface);color:var(--ink);
+               font:inherit;font-size:var(--fs-sm)">
+      <button class="btn sm" id="btnDriveClient">Save</button></div>
+    <div class="setrow"><span class="out">Only needed for the Google Drive route, and only until
+      it is baked into the build. A client ID is <b>not a secret</b> — it identifies the app, it
+      does not authorise anything. Blank hides the Drive option entirely.</span></div>`;
 }
 function settingsPageHTML(A){
   return `<div class="setwrap">
@@ -3445,6 +3981,14 @@ function wireViews(){
   const roleChanged = async () => {
     if(FOLDER.state==="connected") await TRACKER.sync(); else TRACKER.fold();
     renderDataStrip(); render();
+  };
+  const dc=$("#btnDriveClient");
+  if(dc) dc.onclick=()=>{
+    const el=$("#driveClient");
+    DRIVE_IO.setClientId(el ? el.value : "");
+    renderDataStrip(); render();
+    toast(DRIVE_IO.available() ? "Google Drive sign-in is now available."
+                               : "Google Drive option hidden.");
   };
   const rSel=$("#roleSel");
   if(rSel) rSel.onchange=async()=>{ FOLDER.setRolePref(rSel.value); await roleChanged(); };
@@ -4719,7 +5263,36 @@ window.__mockAccess = async (root, tracker) => {
   return window.__refreshRole();
 };
 window.__mockReadOnly = async on => window.__mockAccess(!on, !on);
+/* ---- Drive backend, driven without OAuth ----
+   Handing DRIVE_IO a live token short-circuits auth() entirely, so a test can
+   stub fetch and exercise the real listCsv / readTracker / writeTracker /
+   probe paths. Nothing here weakens the app: without a token every call still
+   goes through Google. */
+window.__driveInstall = opts => {
+  DRIVE_IO.token = (opts && opts.token) || "test-token";
+  DRIVE_IO.tokenExp = Date.now() + 3600000;
+  if(opts && opts.clientId !== undefined) DRIVE_IO.setClientId(opts.clientId);
+  return DRIVE_IO.available();
+};
+window.__driveConnect = async folderId => {
+  /* mirrors connectDrive() exactly — a hook that skipped the load would test
+     a path no user ever takes */
+  await FOLDER.pick({via:"drive", folder:folderId});
+  renderDataStrip();
+  await loadFromFolder();
+  await TRACKER.sync();
+  render();
+  return {name:FOLDER.name, backend:FOLDER.backend(),
+          role:FOLDER.role(), access:FOLDER.access};
+};
+window.__driveState = () => ({
+  available:DRIVE_IO.available(), scopes:DRIVE_IO.SCOPES,
+  folderId:DRIVE_IO.folderId, folderName:DRIVE_IO.folderName,
+  sub:Object.assign({}, DRIVE_IO.sub), backend:FOLDER.backend()
+});
+window.__driveDisconnect = async () => { await FOLDER.disconnect(); renderDataStrip(); render(); };
 window.__folderRole = () => ({role:FOLDER.role(), detected:FOLDER.detectedRole(),
+  backend:FOLDER.backend(),
   pref:FOLDER.rolePref(), access:{root:FOLDER.access.root, tracker:FOLDER.access.tracker},
   canSaveAudit:FOLDER.canSaveAudit(), canTrackWrite:FOLDER.canTrackWrite(),
   canManageTracker:FOLDER.canManageTracker(),

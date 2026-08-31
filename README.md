@@ -144,8 +144,42 @@ person's machine. Each browser appends only to its own file in a `tracker/`
 subfolder, so nobody can overwrite anybody; every browser reads all of them and
 merges. Press **Sync with team** to pull in what others have done.
 
-Needs Chrome or Edge, like the folder feature it builds on. Without a folder
-the tracker still works, private to that browser.
+Two ways to reach the folder:
+
+- **A folder on this computer** — needs Chrome or Edge and a sync client
+  (Drive for Desktop). The original route, and the one Yehuda uses.
+- **Connect Google Drive** — reaches the same folder over the web. No sync
+  client, no local folder, and it works in Safari and Firefox too. Requires a
+  Google OAuth client ID to be configured; without one the option is hidden.
+
+Without either, the tracker still works, private to that browser.
+
+### Turning on the Google Drive route
+
+One-time setup in Google Cloud, by a Workspace admin:
+
+1. **console.cloud.google.com** → new project (or an existing one).
+2. **APIs & Services → Library** → enable **Google Drive API**.
+3. **OAuth consent screen** → User type **Internal**. This is the important
+   one: Internal skips Google's verification review, which the scopes below
+   would otherwise require.
+4. **Credentials → Create credentials → OAuth client ID** → **Web application**.
+   Authorised JavaScript origin: `https://cb.yehuda-ceb.workers.dev`
+   (add `http://127.0.0.1:8111` too if you want it working locally).
+5. Copy the client ID into **Settings → This browser's folder access**, or bake
+   it into `DRIVE_CLIENT_ID_BAKED` in `index.html` so nobody has to.
+
+Scopes requested are `drive.readonly` and `drive.file` — read what is shared
+with you, write only files this app itself created. A client ID is public and
+is safe in the source; it identifies the app and authorises nothing on its own.
+
+**One caveat worth knowing before you roll it out.** Whether `drive.file`
+allows creating a file inside a folder the app did not create is the single
+thing that cannot be tested without a live client ID. It should work and the
+test suite models it that way. If the first tracker write from a teammate
+returns a permissions error, that is why — adding
+`https://www.googleapis.com/auth/drive` to the scope string in `DRIVE_IO.SCOPES`
+fixes it at the cost of a broader grant.
 
 ### One editor, everyone else moves the status
 
@@ -210,17 +244,29 @@ Each person's data is theirs alone and lives on their own computer:
 
 - **Saved report tabs** — that browser's local storage, that device only.
 - **Connected audit folder** — a handle to their own disk, re-granted each
-  browser session.
+  browser session. On the Google Drive route, an access token held in memory
+  only and never written down.
 - **Tracker state** — shared, but only through the folder, and only with people
-  pointing at the same one. It still never reaches a server.
+  pointing at the same one.
 - **Theme and scoring-model tweaks** — that browser only. Model tweaks are
   session-only and reset on reload, so an updated scoring model always takes
   effect.
 
 Two people on the same URL get the same tool and completely separate data.
-Nothing crosses between them, and no report data ever reaches a server. The
-page makes exactly one network call, ever: a fetch of its own `version.json`,
-which carries no data.
+Nothing crosses between them, and no report data reaches any server of ours.
+
+How much the page talks to the network depends on which route you connect by,
+and it is worth being exact about:
+
+- **A folder on this computer** — exactly one call in the page's life: a fetch
+  of its own `version.json`, which carries no data. Reports are read off the
+  disk and never uploaded.
+- **Google Drive** — that same call, plus Google's own sign-in and the Drive
+  API. Reports and tracker files travel between the browser and Google, which
+  is where they already live. Nothing is sent anywhere else, and there is still
+  no server of ours in the path — but "nothing ever leaves the browser" is only
+  literally true of the first route, and it would be sloppy to keep saying it
+  of both.
 
 ---
 

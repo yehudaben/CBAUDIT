@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.11",
+  "version": "2026.09.12",
   "model": "m1.0",
-  "notes": "Contributors now run the tracker: add a merchant, pick the action, move it along the board. Removing a tracked deal stays with the owner — the same line the shared drive draws between Contributor and Content manager."
+  "notes": "A second way in: connect the same shared folder through the Google Drive API instead of a folder on disk. No sync client, and it works in Safari and Firefox — which could not share a tracker at all until now."
 }
