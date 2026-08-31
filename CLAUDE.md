@@ -302,11 +302,20 @@ disagree about what a report is. `LS_BACKEND` remembers which one to restore.
   this way.
 
 **Verified against real Drive, 2026-08-31** (Yehuda's account, the live
-folder): folder resolved by name across shared drives; `capabilities` gave
-root/tracker true; 9 exports listed and downloaded; both tracker files read;
-create-with-parents succeeded and was cleaned up with a 204; PATCH of a
-foreign file 403'd as above. The read path and the create path are known
-good, not assumed.
+folder), on both scope settings:
+
+| | `drive.readonly`+`drive.file` | full `drive` |
+|---|---|---|
+| resolve folder by name across shared drives | ok | ok |
+| `capabilities` → role, writing nothing | ok | ok |
+| list + download 9 exports | ok | ok |
+| read both `events-*.jsonl` | ok | ok |
+| create a file in a folder the app did not create | ok | ok |
+| **update a file the app did not create** | **403** | **ok** |
+
+The last row is the whole reason for the scope. The PATCH was written back
+byte-identical, so the folder was not altered by the test, and the probe file
+created for the create-test was removed with a 204. Nothing here is assumed.
 
 ## The tracker
 

@@ -186,6 +186,12 @@ elevates nobody.** Drive still enforces the shared drive roles, so a Viewer
 holding this scope still cannot write a thing. The scope only decides how much
 of what *you* can already do the app may do on your behalf.
 
+Both settings were tested against the live folder rather than reasoned about.
+Everything else — resolving the folder by name, reading the role from Drive's
+own `capabilities` without writing anything, listing and downloading all nine
+exports, reading both tracker files, creating a file in a folder the app did
+not create — worked on either scope. Only that one update case separated them.
+
 ### One editor, everyone else moves the status
 
 The audit folder lives in **Google Shared Drives → CB Audit → CB Audit
