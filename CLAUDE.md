@@ -295,8 +295,14 @@ the gate; this is only the mirror.
 | role | detected from | may do |
 |---|---|---|
 | owner | root writable | everything |
-| contributor | root read-only, `tracker/` writable | `status`, `note` |
+| contributor | root read-only, `tracker/` writable | everything except `untrack` |
 | viewer | neither writable | nothing |
+
+The contributor line is deliberately **the same line Google draws**: its
+Contributor role is "add, edit and share files" — not delete. So the app's
+contributor adds a merchant, retargets the action and moves the status, and
+cannot remove a tracked deal. Removing takes work off the shared board and its
+outcome history with it; that is the owner's.
 
 - **Two probes, not one.** `_probeDir()` runs against the root and against
   `tracker/` separately, because those folders can carry different
@@ -321,9 +327,14 @@ the gate; this is only the mirror.
 - `TRACKER.mayDo(op)` is the single chokepoint. Every writer — track, untrack,
   action, note, status — goes through `push()`. **Recording locally would be
   worse than refusing**: it would show on that board and no other.
-- `action` is owner-only on purpose: it selects the metric the outcome is
-  judged by, and letting it move mid-measurement changes the verdict
-  retroactively.
+- `action` is open to contributors (2026.09.11). The earlier worry — that
+  retargeting mid-measurement rewrites a verdict — does not hold: the baseline
+  captured at Done stores **every** metric (`cov cbp mcs s cb vi mc rn`), not
+  just the one in force, so switching the action re-reads the same snapshot on
+  a different axis rather than inventing a number.
+- `trackBtn()` has to split by role because it is a **toggle**. For a
+  contributor a tracked row renders a static tick, not a button: offering a
+  control whose click would be refused reads as broken.
 - `fold()` excludes `this.mine` for a **viewer** only — a contributor genuinely
   writes, so their log belongs in the fold. This is why a role change must
   `sync()` and not merely `fold()`: dropping the local log leaves the board

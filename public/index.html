@@ -837,7 +837,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.10";
+const APP_VERSION   = "2026.09.11";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2091,14 +2091,19 @@ const TRACKER = {
     try{ localStorage.setItem(this.LS_LAG, String(this.lagDays)); }catch(e){}
   },
 
-  /* Which operations this browser's role permits. A contributor moves a deal
-     along the board; they do not choose which deals are on it, or which metric
-     will judge the fix, because that is what the outcome is measured against
-     and it must not change under the measurement. */
+  /* Which operations this browser's role permits. A contributor runs the
+     tracker — spots a merchant, adds it, picks the action, moves it along —
+     and mirrors the shared drive's own Contributor role exactly: add and
+     edit, never delete. Removing a tracked deal takes work off the shared
+     board and its outcome history with it, so that stays with the owner.
+
+     Retargeting after the fact is safe: the baseline captured at Done stores
+     every metric, not just the one in force, so switching the action re-reads
+     the same snapshot on a different axis rather than inventing a number. */
   mayDo(op){
     if(FOLDER.isViewer()) return false;
     if(FOLDER.canManageTracker()) return true;
-    return op==="status" || op==="note";
+    return op !== "untrack";
   },
 
   /* ---- the log ---- */
@@ -2380,13 +2385,13 @@ function dataStripHTML(){
   if(FOLDER.state==="connected"){
     const role = FOLDER.role(), owner = role==="owner";
     const badge = role==="viewer"      ? "View only"
-                : role==="contributor" ? "Status only" : "";
+                : role==="contributor" ? "Tracker only" : "";
     const sub = role==="viewer"
       ? `Reports and the team tracker load in full. Adding exports, saving audits and changing
          the tracker are done by whoever holds edit access to this folder.`
       : role==="contributor"
-      ? `You can move a deal along the board — action required, in progress, done. Adding exports,
-         saving audits and choosing which deals are tracked stay with the folder's owner.`
+      ? `You can run the tracker — add a merchant, pick the action, move it along the board.
+         Adding exports, saving audits and removing a tracked deal stay with the folder's owner.`
       : `Audits save to <code>${esc(FOLDER.name)}/${FOLDER.AUDIT_DIR}/</code>
          and are never read back in. Add a new export to the folder, then reload.`;
     return `<div class="data"><div class="drow">
@@ -3071,7 +3076,7 @@ const MODEL_DEFAULTS = JSON.parse(JSON.stringify({
    shared drive, and this only stops the page from lying about it. */
 const ROLE_TEXT = {
   owner:       "owner — can add exports, save audits and run the tracker",
-  contributor: "contributor — can move a status; cannot add exports or save audits",
+  contributor: "contributor — runs the tracker; cannot add exports, save audits or remove a deal",
   viewer:      "viewer — read-only"
 };
 function folderAccessHTML(){
@@ -3204,7 +3209,7 @@ function trkMetric(v, dp){
   return v==null ? "not available" : Number(v).toFixed(dp)+"%";
 }
 function actionSelect(mid, cur){
-  if(!FOLDER.canManageTracker()) return `<span class="trkro">${esc(cur)}</span>`;
+  if(!TRACKER.mayDo("action")) return `<span class="trkro">${esc(cur)}</span>`;
   return `<select class="trkact" data-action-for="${esc(mid)}">${
     TRACK_ACTION_NAMES.map(n=>`<option value="${esc(n)}"${n===cur?" selected":""}>${esc(n)}</option>`)
     .join("")}</select>`;
@@ -3629,10 +3634,13 @@ function trackBtn(e){
   const on = !!t;
   const ttl = on ? "Tracked — "+esc(t.action)+" · "+esc(TRACK_LABEL[t.status]||t.status)
                  : "Track this MID";
-  /* not the owner: still show what the team is tracking, just not a control
-     that would do nothing. Choosing which deals are tracked is the owner's. */
-  if(!FOLDER.canManageTracker())
-    return on ? `<span class="trk on ro" title="${ttl}">✓</span>` : `<span class="trk ph"></span>`;
+  /* The one control is a toggle, so it has to split by role: a contributor
+     may add but not remove, which makes the tick a mark rather than a button.
+     Offering a control whose click would be refused reads as broken. */
+  if(on && !FOLDER.canManageTracker())
+    return `<span class="trk on ro" title="${ttl}">✓</span>`;
+  if(!on && !TRACKER.mayDo("track"))
+    return `<span class="trk ph"></span>`;
   return `<button class="trk${on?" on":""}" data-track="${esc(e.id)}" title="${ttl}"
     aria-pressed="${on?"true":"false"}">${on?"✓":"+"}</button>`;
 }

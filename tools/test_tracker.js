@@ -260,7 +260,7 @@ const base = o => Object.assign(
      which is exactly how a read-only synced drive behaves, with root and
      tracker/ carrying separate flags. */
   R.roles = await page.evaluate(async (mids) => {
-    const [FAT, THIN] = mids;
+    const [FAT, THIN, APEX] = mids;
     const out = {}, tfiles = {};
     const mkdir = (own) => ({
       __files: {},
@@ -290,18 +290,29 @@ const base = o => Object.assign(
     };
     FOLDER.readTracker = async () => Object.keys(tfiles).map(n => ({name: n, text: tfiles[n]}));
 
-    const controls = () => ({
-      status: document.querySelectorAll('[data-status-for]').length,
-      action: document.querySelectorAll('[data-action-for]').length,
-      remove: document.querySelectorAll('[data-untrack]').length,
-      track:  document.querySelectorAll('[data-track]').length
-    });
+    const controls = () => {
+      window.__setView('tracker');
+      const c = {
+        status: document.querySelectorAll('[data-status-for]').length,
+        action: document.querySelectorAll('[data-action-for]').length,
+        remove: document.querySelectorAll('[data-untrack]').length
+      };
+      /* the + toggle is on the AUDIT page — counting it on the tracker page
+         reads zero for every role and proves nothing */
+      window.__setView('audit');
+      c.track    = document.querySelectorAll('[data-track]').length;
+      c.staticOn = document.querySelectorAll('.trk.on.ro').length;
+      c.blank    = document.querySelectorAll('.trk.ph').length;
+      window.__setView('tracker');
+      return c;
+    };
 
     /* ---- owner: both folders writable ---- */
     await window.__mockAccess(true, true);
     TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0; TRACKER.fold();
     window.__track(FAT, 'Watch');
     window.__track(THIN, 'Watch');
+    const THIN_TRACKED = THIN;
     await TRACKER.flush();
     out.owner = {role: window.__folderRole(),
                  tracked: window.__tracker().rows.length,
@@ -320,14 +331,22 @@ const base = o => Object.assign(
     out.contributor.statusTook   = (window.__tracker().rows.find(r => r.mid === FAT) || {}).status;
     out.contributor.reachedFolder = Object.keys(tfiles).length > 0 &&
       Object.values(tfiles).join('').indexOf('"doing"') >= 0;
-    /* everything that decides what is tracked, or how it is judged, refuses */
+    /* a contributor runs the tracker: adding a merchant and retargeting the
+       action both work, and both reach the folder */
     const b2 = window.__trackerEvents().length;
+    window.__track(APEX, 'Watch');
     window.__trackAction(FAT, 'Agent Flag');
-    window.__untrack(THIN);
-    window.__track('0000000000000001', 'Watch');
-    out.contributor.blockedEvents = window.__trackerEvents().length - b2;
-    out.contributor.actionHeld    = (window.__tracker().rows.find(r => r.mid === FAT) || {}).action;
-    out.contributor.stillTracked  = window.__tracker().rows.length;
+    out.contributor.addEvents   = window.__trackerEvents().length - b2;
+    out.contributor.added       = !!window.__tracker().rows.find(r => r.mid === APEX);
+    out.contributor.actionMoved = (window.__tracker().rows.find(r => r.mid === FAT) || {}).action;
+    await TRACKER.flush();
+    out.contributor.addReachedFolder = Object.values(tfiles).join('').indexOf(APEX) >= 0;
+
+    /* removal is the one thing they cannot do — same line the drive draws */
+    const bRem = window.__trackerEvents().length;
+    window.__untrack(THIN_TRACKED);
+    out.contributor.removeEvents = window.__trackerEvents().length - bRem;
+    out.contributor.stillTracked = window.__tracker().rows.length;
     window.__setView('tracker');
     out.contributor.controls = controls();
     out.contributor.strip    = window.__strip().buttons;
@@ -359,7 +378,7 @@ const base = o => Object.assign(
     await window.__setRolePref('contributor');
     out.narrowed = window.__folderRole().role;
     const b5 = window.__trackerEvents().length;
-    window.__trackAction(FAT, 'Watch');
+    window.__untrack(FAT);                       /* the one op a contributor lacks */
     out.narrowedBlocks = window.__trackerEvents().length - b5;
     await window.__mockAccess(false, false);          /* folder says viewer... */
     await window.__setRolePref('contributor');        /* ...preference says more */
@@ -368,7 +387,7 @@ const base = o => Object.assign(
     await window.__mockAccess(true, true);
     out.finalRole = window.__folderRole().role;
     return out;
-  }, [M_FAT, M_THIN]);
+  }, [M_FAT, M_THIN, M_APEX]);
 
   R.finalErrors = errs.slice(R.bootErrors.length + R.afterLoadErrors.length);
   console.log(JSON.stringify(R, null, 2));
@@ -449,19 +468,30 @@ const base = o => Object.assign(
   want(RL.contributor.statusTook === 'doing',
        'the status must actually take, got ' + RL.contributor.statusTook);
   want(RL.contributor.reachedFolder, 'a contributor status must reach the folder, not just the board');
-  want(RL.contributor.blockedEvents === 0,
-       'action, untrack and track must all refuse for a contributor, got '
-       + RL.contributor.blockedEvents + ' events');
-  want(RL.contributor.actionHeld === 'Watch',
-       'the action must not move under a contributor, got ' + RL.contributor.actionHeld);
-  want(RL.contributor.stillTracked === 2, 'a contributor must not change what is tracked');
+  want(RL.contributor.addEvents === 2,
+       'a contributor must be able to add a merchant and set its action, got '
+       + RL.contributor.addEvents + ' events');
+  want(RL.contributor.added, 'the added merchant must appear on the board');
+  want(RL.contributor.addReachedFolder,
+       'a contributor-added merchant must reach the folder, not just the board');
+  want(RL.contributor.actionMoved === 'Agent Flag',
+       'a contributor must be able to retarget the action, got ' + RL.contributor.actionMoved);
+  want(RL.contributor.removeEvents === 0,
+       'removal must refuse for a contributor, got ' + RL.contributor.removeEvents + ' events');
+  want(RL.contributor.stillTracked === 3,
+       'nothing may be removed under a contributor, got ' + RL.contributor.stillTracked + ' rows');
   want(RL.contributor.controls.status > 0, 'a contributor keeps the status buttons');
-  want(RL.contributor.controls.action === 0, 'a contributor gets no action dropdown');
+  want(RL.contributor.controls.action > 0, 'a contributor keeps the action dropdown');
   want(RL.contributor.controls.remove === 0, 'a contributor gets no Remove');
-  want(RL.contributor.controls.track === 0, 'a contributor gets no + on audit rows');
+  want(RL.contributor.controls.track > 0,
+       'a contributor keeps the + on untracked audit rows, got ' + RL.contributor.controls.track);
+  want(RL.contributor.controls.staticOn > 0,
+       'an already-tracked row must show a static tick, not a toggle that would refuse');
+  want(RL.viewer.controls.track === 0, 'a viewer gets no + at all');
+  want(RL.owner.controls.track > 0, 'the owner keeps the +');
   want(RL.contributor.strip.indexOf('Save audit') < 0, 'a contributor cannot save an audit');
-  want(RL.contributor.badge === 'Status only',
-       'the strip must say Status only, got ' + RL.contributor.badge);
+  want(RL.contributor.badge === 'Tracker only',
+       'the strip must say Tracker only, got ' + RL.contributor.badge);
   want(RL.contributor.auditThrew, 'writeFile must refuse a contributor at the FOLDER layer');
 
   want(RL.viewerRole === 'viewer', 'neither folder writable must read as viewer');

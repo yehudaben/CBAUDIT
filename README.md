@@ -184,10 +184,6 @@ the `+` on audit rows disappears, **Save audit** disappears.
 **Viewer** — badge reads **View only**. Everything above is text. **Refresh
 from team** still pulls the whole board.
 
-Why the action is owner-only: it decides *which metric* judges whether the fix
-worked, and the outcome is measured against it. Letting it move mid-measurement
-would change the answer retroactively.
-
 This matters more than it sounds. Without any of it a restricted person's
 clicks land in their own browser storage, fold into their own board, and look
 exactly like a change the team can see — while reaching nobody. Restricted has

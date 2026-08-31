@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.10",
+  "version": "2026.09.11",
   "model": "m1.0",
-  "notes": "Three folder roles instead of two. A contributor can move a deal along the board — action required, in progress, done — without being able to add exports, save audits, or change which deals are tracked."
+  "notes": "Contributors now run the tracker: add a merchant, pick the action, move it along the board. Removing a tracked deal stays with the owner — the same line the shared drive draws between Contributor and Content manager."
 }
