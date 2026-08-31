@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.12",
+  "version": "2026.09.13",
   "model": "m1.0",
-  "notes": "A second way in: connect the same shared folder through the Google Drive API instead of a folder on disk. No sync client, and it works in Safari and Firefox — which could not share a tracker at all until now."
+  "notes": "Google Drive sign-in is switched on. Connect the shared folder from any browser on any machine, with no Drive for Desktop."
 }

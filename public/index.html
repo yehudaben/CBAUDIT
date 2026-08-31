@@ -848,7 +848,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.12";
+const APP_VERSION   = "2026.09.13";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2152,7 +2152,8 @@ const DRIVE_GIS   = "https://accounts.google.com/gsi/client";
 /* An OAuth client ID is public, not a secret — it is safe in this file.
    Empty means the Drive option is hidden entirely. Settings can override it
    for testing without a redeploy. */
-const DRIVE_CLIENT_ID_BAKED = "";
+const DRIVE_CLIENT_ID_BAKED =
+  "829837709828-6ktioqmt9gl94b2q8pr917ngsp8u50r3.apps.googleusercontent.com";
 
 const DRIVE_IO = {
   kind:"drive",
