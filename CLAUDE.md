@@ -422,6 +422,57 @@ looks broken, and the person believes the team can see their work. Step 9 of
 `tools/test_tracker.js` is the only thing standing between that and a release —
 verify it fails when a guard is removed, not just that it passes.
 
+### Colour on the tracker
+
+Added 2026.09.15. The board is grouped by action and **an action is a problem
+family**, so the tracker carries the same three colours the audit card does and
+the eye can follow one merchant between the two screens.
+
+| Action | Family | Colour |
+|---|---|---|
+| RDR Fix (ARN Lookup) | `rdr` | red |
+| MC Fix (Descriptor Lookup) | `mc` | blue |
+| Agent Flag | `gen` | orange |
+| Watch | `gen` | orange |
+
+`famOfAction()` falls back to `gen` for an unknown action rather than rendering
+nothing. Applied as `fam-*` on `.agrp` / `.trow` / `.orow` (left rail plus a
+tinted group header) and `f-*` on the metric readout and the action pill.
+
+**Rails only, no tinted row backgrounds.** A board is read as a list, and a
+wash on every row flattens the status headings that organise it.
+
+**`--rdr-ink` and `--mc-ink` exist for exactly the reason `--gen-ink` does.**
+`--crit` and `--accent` are fine as rails and fills but fail 4.5:1 as body
+text — measured 4.30 (light accent), 3.62 and 3.94 (dark crit and accent). The
+text-safe pair is `#b3261e` / `#1f5aa8` light and `#f4938a` / `#8ab6ef` dark.
+All twelve ink-on-surface and ink-on-tint combinations were then re-measured
+at **5.36–8.31**, clearing the full body-text bar rather than the 3:1 the card
+settled for. Rails keep `--crit` / `--accent`. If you add a family, measure it;
+do not eyeball it.
+
+### Moving the measurement date
+
+Added 2026.09.15. A fix often lands days before anyone ticks it off, and until
+now that lost time came straight off the measurement window.
+
+- `setStatus(mid, value, at)` takes an optional effective date;
+  `setDoneAt(mid, at)` is the alias the UI uses. Both emit an ordinary `status`
+  event, so it folds, syncs and permissions exactly like any other.
+- **`ev.at` is a separate field from `ev.ts`, and that is load-bearing.** `ts`
+  stays the real moment the event was written because **the fold orders by
+  it** — a backdated `ts` would silently reorder history. `fold()` reads
+  `cur.doneAt = ev.at || ev.ts`.
+- **The baseline must come from a report that existed on that date.**
+  `reportAt(atMs)` picks the newest report at or before it and
+  `snapshotFor(mid, atMs)` reads from that. Today's numbers wearing an older
+  label would be a fabricated figure.
+- **If no report is old enough, the change is refused**, not approximated:
+  `setStatus` throws with `e.noReport` and the UI says which date it could not
+  reach. Hard rule 1 applies here as everywhere.
+- The outcome row shows `baseline from <date>` so the provenance is on screen
+  and auditable.
+
 ### Judging whether it worked
 
 Each action type is judged by the metric that would actually move if the fix

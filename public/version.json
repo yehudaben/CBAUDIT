@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.14",
+  "version": "2026.09.15",
   "model": "m1.0",
-  "notes": "Google Drive sign-in now works for people who already used the folder route: drive.file could not update a file it had not created, which locked the owner out of their own tracker file."
+  "notes": "The tracker now carries the same problem-family colours as the audit card — RDR red, MC blue, general orange. And an outcome's measuring-from date can be moved back, for a fix that landed before anyone ticked it off."
 }

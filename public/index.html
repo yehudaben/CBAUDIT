@@ -28,6 +28,11 @@
   --gen-ink:   #9c4a16;   /*        audit-card "general problem" text.
                               --serious is 2.6:1 on the light surface,
                               too pale for a figure; this is 6.1:1.    */
+  --rdr-ink:   #b3261e;   /*        the same problem twice more: --crit and  */
+  --mc-ink:    #1f5aa8;   /*        --accent are fine as rails and fills but
+                              fail 4.5:1 as body text (4.3 light accent,
+                              3.6/3.9 dark). These are the text-safe pair;
+                              rails keep --crit / --accent.            */
 
   /* ---- surfaces + ink (light mode) ------------------------------ */
   --page:      #f9f9f7;   /* [live] page background                  */
@@ -78,7 +83,7 @@
   --muted:#898781; --grid:#2c2c2a; --axis:#383835;
   --border:rgba(255,255,255,0.10);
   --wash:rgba(255,255,255,0.03); --wash2:rgba(255,255,255,0.07);
-  --accent:#3987e5; --gen-ink:#ec835a;
+  --accent:#3987e5; --gen-ink:#ec835a; --rdr-ink:#f4938a; --mc-ink:#8ab6ef;
 }}
 :root[data-theme="dark"]{
   color-scheme:dark;
@@ -86,7 +91,7 @@
   --muted:#898781; --grid:#2c2c2a; --axis:#383835;
   --border:rgba(255,255,255,0.10);
   --wash:rgba(255,255,255,0.03); --wash2:rgba(255,255,255,0.07);
-  --accent:#3987e5; --gen-ink:#ec835a;
+  --accent:#3987e5; --gen-ink:#ec835a; --rdr-ink:#f4938a; --mc-ink:#8ab6ef;
 }
 
 /* ===================================================================
@@ -487,6 +492,32 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .trow .cur,.orow .cur{font-size:var(--fs-sm);color:var(--ink2)}
 .orow .ac{font-size:var(--fs-xs);font-weight:700;padding:1.5px 6px;border-radius:var(--r-sm);
   background:var(--wash2);color:var(--ink2)}
+/* ---- problem-family colour on the tracker, same three the card uses ----
+   Colour says WHICH problem, never how bad it is. The action name always sits
+   next to the colour, so the hue is reinforcement and never the only carrier.
+   Rails only — no tinted row backgrounds, because a board is read as a list
+   and a wash on every row would flatten the status headings that organise it. */
+.agrp.fam-rdr{border-left:var(--rail) solid var(--crit)}
+.agrp.fam-mc {border-left:var(--rail) solid var(--accent)}
+.agrp.fam-gen{border-left:var(--rail) solid var(--gen-ink)}
+.agrp.fam-rdr .ahd{color:var(--rdr-ink);background:rgba(208,59,59,.07)}
+.agrp.fam-mc  .ahd{color:var(--mc-ink);background:rgba(42,120,214,.08)}
+.agrp.fam-gen .ahd{color:var(--gen-ink);background:rgba(236,131,90,.13)}
+.orow.fam-rdr{border-left:var(--rail) solid var(--crit)}
+.orow.fam-mc {border-left:var(--rail) solid var(--accent)}
+.orow.fam-gen{border-left:var(--rail) solid var(--gen-ink)}
+.f-rdr b,.f-rdr{color:var(--rdr-ink)}
+.f-mc  b,.f-mc {color:var(--mc-ink)}
+.f-gen b,.f-gen{color:var(--gen-ink)}
+.orow .ac.f-rdr{background:rgba(208,59,59,.07)}
+.orow .ac.f-mc {background:rgba(42,120,214,.08)}
+.orow .ac.f-gen{background:rgba(236,131,90,.13)}
+/* ---- the measurement date, overridable ---- */
+.mfrom{font-size:var(--fs-xs);color:var(--muted);display:inline-flex;gap:6px;
+  align-items:center;flex-wrap:wrap}
+.mfrom .dfrom{font:inherit;font-size:var(--fs-xs);padding:2px 5px;color:var(--ink);
+  border:1px solid var(--axis);border-radius:var(--r-sm);background:var(--surface)}
+.mfrom .bsrc{color:var(--muted)}
 .trkact{padding:3px 6px;border:1px solid var(--axis);border-radius:var(--r-sm);
   background:var(--surface)}
 .trkst{display:inline-flex;gap:2px;flex-wrap:wrap}
@@ -848,7 +879,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.14";
+const APP_VERSION   = "2026.09.15";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2516,6 +2547,18 @@ const TRACK_ACTIONS = {
 };
 const TRACK_ACTION_NAMES = Object.keys(TRACK_ACTIONS);
 
+/* The tracker is grouped by action, and an action IS a problem family — so the
+   board can carry the same three colours the audit card does and the eye can
+   follow one merchant between the two screens without re-learning anything.
+   Colour marks WHICH problem, never how bad it is, exactly as on the card. */
+const ACTION_FAMILY = {
+  "RDR Fix (ARN Lookup)":       "rdr",   /* red   — F1/F2, Visa without RDR */
+  "MC Fix (Descriptor Lookup)": "mc",    /* blue  — F3, Mastercard descriptor */
+  "Agent Flag":                 "gen",   /* orange— F5/F4, the rate itself */
+  "Watch":                      "gen"
+};
+const famOfAction = a => ACTION_FAMILY[a] || "gen";
+
 function trackStampMs(v){
   if(!v) return null;
   const s = String(v).indexOf("T")>0 ? String(v) : String(v).replace(" ","T");
@@ -2689,7 +2732,10 @@ const TRACKER = {
       else if(ev.op==="note"){ cur.note = ev.value||""; }
       else if(ev.op==="status"){
         cur.status = ev.value;
-        if(ev.value==="done"){ cur.doneAt = ev.ts; if(ev.baseline) cur.baseline = ev.baseline; }
+        /* ev.at is the backdated measurement date; ev.ts is when it was
+           written. Only the former is what an outcome is measured from. */
+        if(ev.value==="done"){ cur.doneAt = ev.at || ev.ts;
+                               if(ev.baseline) cur.baseline = ev.baseline; }
       }
       cur.updatedAt = ev.ts;
     });
@@ -2715,17 +2761,27 @@ const TRACKER = {
   untrack(mid){ return this.push({mid:String(mid), op:"untrack"}); },
   setAction(mid, value){ return this.push({mid:String(mid), op:"action", value}); },
   setNote(mid, value){ return this.push({mid:String(mid), op:"note", value:String(value||"")}); },
-  setStatus(mid, value){
+  /* `at` backdates the measurement, for a fix that landed before anyone got
+     round to ticking it off. It is a SEPARATE field from ts on purpose: ts
+     stays the real moment the event was written, because the fold orders by
+     it and a backdated ts would silently reorder history. */
+  setStatus(mid, value, at){
     if(TRACK_STATUS.indexOf(value)<0) throw new Error("unknown status: "+value);
     const ev = {mid:String(mid), op:"status", value};
+    const atMs = at ? trackStampMs(at) : null;
     /* the baseline is captured at Done and travels with the event, so the
        verdict cannot drift when old reports leave the library */
     if(value==="done"){
-      const b = this.snapshotFor(mid);
+      const b = this.snapshotFor(mid, atMs);
+      if(!b && atMs!==null) { const e=new Error("no-report-before"); e.noReport=true; throw e; }
       if(b) ev.baseline = b;
+      if(atMs!==null) ev.at = new Date(atMs).toISOString();
     }
     return this.push(ev);
   },
+  /* Move an already-done row's measurement date. Same event, so it folds and
+     syncs like any other status change and needs no new machinery. */
+  setDoneAt(mid, at){ return this.setStatus(mid, "done", at); },
 
   /* the action a row's own flags argue for, used as the default */
   suggest(mid){
@@ -2735,10 +2791,30 @@ const TRACKER = {
     if(e.F.indexOf("F3")>=0) return "MC Fix (Descriptor Lookup)";
     return "Watch";
   },
-  snapshotFor(mid){
-    const A = window.__A, e = A && A.byMid ? A.byMid[mid] : null;
+  /* Which report a baseline is read from. With no date that is the active
+     report — the normal case, marking Done today. With a date it is the newest
+     report at or before that date, because a baseline is EVIDENCE: it has to
+     come from a report that actually existed then, not from today's numbers
+     wearing an older date. If no report is old enough there is nothing to
+     read and this returns null; the row then says "no baseline captured"
+     rather than inventing one. */
+  reportAt(atMs){
+    if(atMs==null) return {stamp:(SNAP_A&&SNAP_A.stamp)||null, A:window.__A};
+    let best=null, bestMs=null;
+    LIB.forEach(sn=>{
+      const ms = trackStampMs(sn.stamp);
+      if(ms===null || ms>atMs) return;
+      if(bestMs===null || ms>bestMs){ best=sn; bestMs=ms; }
+    });
+    if(!best) return null;
+    const snap = snapToSnapshot(best);
+    return {stamp:snap.stamp, A:analyse(snap)};
+  },
+  snapshotFor(mid, atMs){
+    const src = this.reportAt(atMs==null ? null : atMs);
+    const e = src && src.A && src.A.byMid ? src.A.byMid[mid] : null;
     if(!e) return null;
-    return {stamp: (SNAP_A && SNAP_A.stamp) || null,
+    return {stamp: src.stamp || null,
             cov:e.cov, cbp:e.cbp, mcs:e.mcs, s:e.s, cb:e.cb, vi:e.vi, mc:e.mc, rn:e.rn};
   },
 
@@ -2755,7 +2831,7 @@ const TRACKER = {
                  metric:spec.metric, metricLabel:spec.label, dp:spec.dp,
                  base:null, now:null, delta:null, verdict:"pending",
                  elapsedDays:null, sales:cur?cur.s:null, thinFloor:MODEL.thinSales,
-                 reportStamp:(SNAP_A&&SNAP_A.stamp)||null,
+                 reportStamp:(SNAP_A&&SNAP_A.stamp)||null, doneAt:t.doneAt||null,
                  baseStamp:t.baseline?t.baseline.stamp:null};
 
     if(t.status!=="done" && t.status!=="closed"){ out.verdict="not-done"; return out; }
@@ -3785,7 +3861,8 @@ function trackerRowHTML(t, A){
   const e = A && A.byMid ? A.byMid[t.mid] : null;
   const spec = TRACK_ACTIONS[t.action] || TRACK_ACTIONS["Watch"];
   const now = e ? e[spec.metric] : null;
-  return `<div class="trow">
+  const fam = famOfAction(t.action);
+  return `<div class="trow fam-${fam}">
     <div class="tmain">
       <span class="nm">${esc(e?e.m:t.mid)}</span>
       ${e?`<span class="dba">— ${esc(e.d)}</span>`:`<span class="dba">— not in this report</span>`}
@@ -3795,7 +3872,7 @@ function trackerRowHTML(t, A){
     </div>
     <div class="tmeta">
       ${actionSelect(t.mid, t.action)}
-      <span class="cur">${esc(spec.label)} now <b>${trkMetric(now, spec.dp)}</b></span>
+      <span class="cur f-${fam}">${esc(spec.label)} now <b>${trkMetric(now, spec.dp)}</b></span>
       ${statusBtns(t.mid, t.status)}
       ${FOLDER.canManageTracker()
         ? `<button class="trkx" data-untrack="${esc(t.mid)}" title="Stop tracking">Remove</button>`
@@ -3823,7 +3900,9 @@ function outcomeRowHTML(o, A){
   } else {
     detail = `baseline ${trkMetric(o.base,o.dp)}`;
   }
-  return `<div class="orow">
+  const fam = famOfAction(o.action);
+  const doneDay = o.doneAt ? String(o.doneAt).slice(0,10) : "";
+  return `<div class="orow fam-${fam}">
     <div class="tmain">
       <span class="nm">${esc(e?e.m:o.mid)}</span>
       ${e?`<span class="dba">— ${esc(e.d)}</span>`:""}
@@ -3832,8 +3911,15 @@ function outcomeRowHTML(o, A){
       <span class="vd ${v.c}">${esc(v.t)}</span>
     </div>
     <div class="tmeta">
-      <span class="ac">${esc(o.action)}</span>
+      <span class="ac f-${fam}">${esc(o.action)}</span>
       <span class="cur">${esc(o.metricLabel)} · ${detail}</span>
+      <span class="mfrom">measuring from
+        ${TRACKER.mayDo("status")
+          ? `<input type="date" class="dfrom" data-doneat-for="${esc(o.mid)}"
+               value="${esc(doneDay)}" title="The date the fix actually landed">`
+          : `<b>${esc(doneDay||"not set")}</b>`}
+        ${o.baseStamp?`<span class="bsrc">baseline from ${esc(String(o.baseStamp).slice(0,10))}</span>`:""}
+      </span>
       ${FOLDER.isViewer()
         ? `<span class="trkro">${esc(TRACK_LABEL[o.status]||o.status)}</span>`
         : o.status==="done"
@@ -3879,7 +3965,7 @@ function trackerPageHTML(A){
       /* grouped by action, so four MIDs needing the same operation read as one job */
       const byAct={}; rows.forEach(r=>(byAct[r.action]||(byAct[r.action]=[])).push(r));
       Object.keys(byAct).sort().forEach(act=>{
-        P.push(`<div class="agrp"><div class="ahd">${esc(act)}
+        P.push(`<div class="agrp fam-${famOfAction(act)}"><div class="ahd">${esc(act)}
           <span class="n">${byAct[act].length}</span></div>
           ${byAct[act].map(t=>trackerRowHTML(t,A)).join("")}</div>`);
       });
@@ -3944,6 +4030,22 @@ function wireViews(){
   });
   document.querySelectorAll("[data-action-for]").forEach(sel=>{
     sel.onchange=()=>{ TRACKER.setAction(sel.getAttribute("data-action-for"), sel.value); render(); };
+  });
+  document.querySelectorAll("[data-doneat-for]").forEach(inp=>{
+    inp.onchange=()=>{
+      const mid = inp.getAttribute("data-doneat-for");
+      if(!inp.value){ render(); return; }
+      try{
+        TRACKER.setDoneAt(mid, inp.value+"T12:00:00");
+        render();
+      }catch(e){
+        render();
+        showErr(e.noReport
+          ? `No report in this library is from ${esc(inp.value)} or earlier, so there is `
+            + `nothing to measure against from that date. Load an older export first.`
+          : `Could not move the date: ${esc(e.message||e)}`);
+      }
+    };
   });
   document.querySelectorAll("[data-untrack]").forEach(b=>{
     b.onclick=()=>{ TRACKER.untrack(b.getAttribute("data-untrack")); render(); };
@@ -5182,7 +5284,22 @@ window.__tracker = () => ({
 window.__trackerEvents = () => TRACKER.mine.slice();
 window.__trackerAll = () => TRACKER.all.slice();
 window.__track = (mid,action)=>{ TRACKER.track(mid,action); render(); return TRACKER.get(mid); };
-window.__trackStatus = (mid,v)=>{ TRACKER.setStatus(mid,v); render(); return TRACKER.get(mid); };
+window.__trackStatus = (mid,v,at)=>{ TRACKER.setStatus(mid,v,at); render(); return TRACKER.get(mid); };
+window.__trackDoneAt = (mid,at)=>{
+  try{ TRACKER.setDoneAt(mid,at); render(); return {ok:true, row:TRACKER.get(mid)}; }
+  catch(e){ return {ok:false, noReport:!!e.noReport, err:e.message}; }
+};
+window.__famOf = a => famOfAction(a);
+window.__trackerColours = () => {
+  const pick = sel => [...document.querySelectorAll(sel)].map(n=>{
+    const m = String(n.className).match(/fam-(rdr|mc|gen)/);
+    return {cls: m?m[1]:null, text:(n.querySelector(".ahd")||n).textContent.trim().slice(0,40)};
+  });
+  return {groups:pick(".agrp"), outcomes:pick(".orow"),
+          rows:[...document.querySelectorAll(".trow")].map(n=>{
+            const m=String(n.className).match(/fam-(rdr|mc|gen)/); return m?m[1]:null; }),
+          dateInputs: document.querySelectorAll("[data-doneat-for]").length};
+};
 window.__trackAction = (mid,v)=>{ TRACKER.setAction(mid,v); render(); return TRACKER.get(mid); };
 window.__untrack = mid=>{ TRACKER.untrack(mid); render(); return TRACKER.get(mid); };
 window.__outcome = mid=>TRACKER.outcome(mid);

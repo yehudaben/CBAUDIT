@@ -137,6 +137,22 @@ The measurement lag is in Settings, default 14 days. **It is a setting, not a
 measured figure** — set it from your own experience of how long disputes take
 to post.
 
+### Colour, and moving the date
+
+The board carries the same three colours as the audit card, so a merchant looks
+the same on both screens: **red** for RDR work, **blue** for Mastercard
+descriptor work, **orange** for the rate itself (Agent Flag and Watch). Colour
+says *which* problem, never how bad it is — the action name always sits beside
+it, so nothing depends on seeing the hue.
+
+On the **Outcomes** tab each row has a **measuring from** date you can move.
+Use it when a fix landed before anyone got round to ticking it off: set the day
+it actually went in and the verdict recomputes from there. The row also shows
+`baseline from <date>`, because the baseline is re-read from the newest report
+at or before the date you chose — a real report, not today's numbers with an
+older label on them. If nothing in your library goes back that far the change
+is refused and tells you so, rather than guessing.
+
 ### Sharing it with your team
 
 Connect the same folder — Dropbox, Drive, OneDrive, a network share — on each

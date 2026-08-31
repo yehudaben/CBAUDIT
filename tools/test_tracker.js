@@ -389,6 +389,95 @@ const base = o => Object.assign(
     return out;
   }, [M_FAT, M_THIN, M_APEX]);
 
+  /* ---- 10. problem-family colour on the tracker ----
+     The board is grouped by action and an action IS a family, so the same
+     three colours the audit card uses can carry across. Asserted from the
+     rendered DOM rather than from the map, because a map with no CSS behind
+     it looks correct and shows nothing. */
+  R.colour = await page.evaluate(async mids => {
+    const [FAT, THIN, APEX] = mids;
+    await window.__mockAccess(true, true);
+    TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0; TRACKER.fold();
+    window.__track(FAT,  'MC Fix (Descriptor Lookup)');
+    window.__track(THIN, 'RDR Fix (ARN Lookup)');
+    window.__track(APEX, 'Agent Flag');
+    window.__setView('tracker');
+    const board = window.__trackerColours();
+    /* every family must also be a real painted rail, not just a class name */
+    const seen = {};
+    document.querySelectorAll('.agrp').forEach(g => {
+      const m = String(g.className).match(/fam-(rdr|mc|gen)/);
+      if (m) seen[m[1]] = getComputedStyle(g).borderLeftColor;
+    });
+    return {map: {mc: window.__famOf('MC Fix (Descriptor Lookup)'),
+                  rdr: window.__famOf('RDR Fix (ARN Lookup)'),
+                  agent: window.__famOf('Agent Flag'),
+                  watch: window.__famOf('Watch'),
+                  unknown: window.__famOf('Something Else')},
+            groups: board.groups.map(g => g.cls).sort(),
+            rowsAllTagged: board.rows.length > 0 && board.rows.every(Boolean),
+            railColours: seen,
+            distinctRails: [...new Set(Object.values(seen))].length};
+  }, [M_FAT, M_THIN, M_APEX]);
+
+  /* ---- 11. backdating the measurement date ----
+     A fix that landed before anyone ticked it off has to be measurable from
+     when it actually landed. The baseline must then come from a report that
+     existed on that date — not from today's numbers wearing an older label. */
+  /* backdating needs a library with older reports in it — the whole point is
+     reading a baseline from a report that existed on the chosen date */
+  const fxNames = ['fx_2026-07-24-0900.csv', 'fx_2026-07-31-2300.csv',
+                   'fx_2026-08-05-0900.csv', 'fx_2026-08-14-0901.csv'];
+  const fx = fxNames.map(n => ({name: n, text: fs.readFileSync(path.join(FIX, n), 'utf8')}));
+  R.backdate = await page.evaluate(async ({mids, fx}) => {
+    const [FAT] = mids;
+    const out = {};
+    fx.forEach(f => window.__loadForTest(f.text, f.name));
+    await new Promise(r => setTimeout(r, 300));
+    const stamps = window.__lib().map(s => s.stamp).sort();
+    out.reports = stamps;
+
+    TRACKER.mine = []; TRACKER.all = []; TRACKER.seq = 0; TRACKER.fold();
+    window.__track(FAT, 'Watch');
+    window.__trackStatus(FAT, 'done');                 /* done "today" */
+    const fresh = window.__outcome(FAT);
+    out.today = {verdict: fresh.verdict, baseStamp: fresh.baseStamp,
+                 doneAt: String(fresh.doneAt || '').slice(0, 10),
+                 elapsed: fresh.elapsedDays};
+
+    /* move it back to a date an older report covers */
+    const r = window.__trackDoneAt(FAT, '2026-07-25T12:00:00');
+    out.moved = {ok: r.ok, err: r.err};
+    const back = window.__outcome(FAT);
+    out.backdated = {verdict: back.verdict, baseStamp: back.baseStamp,
+                     doneAt: String(back.doneAt || '').slice(0, 10),
+                     elapsed: back.elapsedDays, base: back.base, now: back.now};
+
+    /* the baseline must be the newest report AT OR BEFORE that date */
+    out.baselineIsOlderReport = String(back.baseStamp || '').slice(0, 10) <= '2026-07-25';
+
+    /* ts must stay the real write time — the fold orders by it */
+    const evs = window.__trackerEvents();
+    const doneEv = evs.filter(e => e.op === 'status' && e.value === 'done').pop();
+    out.event = {hasAt: !!doneEv.at,
+                 atDay: String(doneEv.at || '').slice(0, 10),
+                 tsIsNotBackdated: String(doneEv.ts).slice(0, 4) !== '2026'
+                                   || doneEv.ts !== doneEv.at};
+
+    /* a date older than every report cannot be honoured — no baseline exists */
+    const tooOld = window.__trackDoneAt(FAT, '2020-01-01T12:00:00');
+    out.tooOld = {ok: tooOld.ok, noReport: tooOld.noReport};
+    const still = window.__outcome(FAT);
+    out.unchangedAfterRefusal = String(still.baseStamp || '').slice(0, 10)
+                                === out.backdated.baseStamp.slice(0, 10);
+
+    window.__setView('tracker');
+    VIEW.trackTab = 'outcomes'; render();
+    out.dateInputs = document.querySelectorAll('[data-doneat-for]').length;
+    out.showsBaselineSource = !!document.querySelector('.mfrom .bsrc');
+    return out;
+  }, {mids: [M_FAT], fx});
+
   R.finalErrors = errs.slice(R.bootErrors.length + R.afterLoadErrors.length);
   console.log(JSON.stringify(R, null, 2));
 
@@ -512,6 +601,48 @@ const base = o => Object.assign(
   want(RL.cannotWiden === 'viewer',
        'the preference must never widen past the folder, got ' + RL.cannotWiden);
   want(RL.finalRole === 'owner', 'clearing the preference must restore the detected role');
+
+  const C = R.colour;
+  want(C.map.mc === 'mc' && C.map.rdr === 'rdr' && C.map.agent === 'gen'
+       && C.map.watch === 'gen', 'action must map to the card families, got '
+       + JSON.stringify(C.map));
+  want(C.map.unknown === 'gen', 'an unknown action must fall back, not go blank');
+  want(JSON.stringify(C.groups) === JSON.stringify(['gen', 'mc', 'rdr']),
+       'each action group must carry its family, got ' + JSON.stringify(C.groups));
+  want(C.rowsAllTagged, 'every tracker row must carry a family class');
+  want(C.distinctRails === 3,
+       'the three families must paint three DIFFERENT rails, got '
+       + C.distinctRails + ': ' + JSON.stringify(C.railColours));
+
+  const B = R.backdate;
+  want(B.reports.length >= 2, 'this test needs several reports, got ' + B.reports.length);
+  /* "today" is after the newest export, so the honest answer is that there is
+     no evidence yet — a different problem from waiting out the lag, and the
+     exact state that sends someone looking for this override */
+  want(B.today.verdict === 'no-report-since',
+       'done-today with an older newest report must read no-report-since, got '
+       + B.today.verdict);
+  want(B.moved.ok, 'backdating must succeed: ' + B.moved.err);
+  want(B.backdated.doneAt === '2026-07-25',
+       'the measurement date must move, got ' + B.backdated.doneAt);
+  want(B.baselineIsOlderReport,
+       'the baseline must come from a report at or before that date, got '
+       + B.backdated.baseStamp);
+  want(B.backdated.elapsed > B.today.elapsed,
+       'backdating must lengthen the elapsed window, got '
+       + B.backdated.elapsed + ' vs ' + B.today.elapsed);
+  want(['improved', 'worse', 'flat', 'thin'].indexOf(B.backdated.verdict) >= 0,
+       'with the lag elapsed the outcome must be reported or denominator-gated, got '
+       + B.backdated.verdict);
+  want(B.event.hasAt && B.event.atDay === '2026-07-25',
+       'the event must carry the effective date, got ' + JSON.stringify(B.event));
+  want(B.event.tsIsNotBackdated,
+       'ts must stay the real write time — the fold orders by it');
+  want(!B.tooOld.ok && B.tooOld.noReport,
+       'a date older than every report must be refused, not guessed');
+  want(B.unchangedAfterRefusal, 'a refused date must leave the baseline alone');
+  want(B.dateInputs > 0, 'the outcomes tab must offer the date control');
+  want(B.showsBaselineSource, 'the row must say which report the baseline came from');
 
   console.log('\ntracker assertions        : ' + (fail.length ? fail.length + ' FAILED' : '0 failures'));
   fail.forEach(f => console.log('  FAIL  ' + f));
