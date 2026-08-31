@@ -149,24 +149,26 @@ the tracker still works, private to that browser.
 
 ### One editor, everyone else moves the status
 
-The audit folder lives in **Google Shared Drives → PaymentHelp → CB Audit
+The audit folder lives in **Google Shared Drives → CB Audit → CB Audit
 Location**. Who may write is decided there, not in the app.
 
-**The setup that gives you what you want:**
+**This is configured and live** (set up 2026-08-30):
 
-1. Shared-drive membership: you **Manager**, the team **Viewer**.
-2. Then share the `tracker/` **subfolder** with the team as **Contributor**.
+| | CB Audit drive | `tracker/` | Add exports | Save audits | Move a status |
+|---|---|---|---|---|---|
+| yehuda@ | Manager | Manager | yes | yes | yes |
+| andrew@ | Viewer | **Contributor** | no | no | **yes** |
+| ben@ | Viewer | **Contributor** | no | no | **yes** |
+| brett@ | Viewer | **Contributor** | no | no | **yes** |
+| luis@ | Viewer | **Contributor** | no | no | **yes** |
 
-Step 2 is legal because inside a shared drive a folder can be shared to grant
-*more* access than someone's drive-level role — never less. So the team can
-write their own tracker file and nothing else: they cannot add an export,
-cannot save an audit, cannot delete anything.
-
-| | Add exports | Save audits | Move a status | Choose what's tracked |
-|---|---|---|---|---|
-| You (Manager) | yes | yes | yes | yes |
-| Team (Viewer + Contributor on `tracker/`) | no | no | **yes** | no |
-| Team (Viewer only) | no | no | no | no |
+The folder-level Contributor grant is legal because inside a shared drive a
+folder can be shared to grant *more* access than someone's drive-level role —
+never less. That is the whole reason this lives in its own shared drive rather
+than in **PaymentHelp**: the four of them hold Manager or Content manager
+there, and Google gives no way to narrow that for one folder. Moving the audit
+out was the only way to restrict it without touching their access to CB Ratios,
+Residual Reports, VPN Connect and the rest of PaymentHelp.
 
 ### What the app does with that
 
