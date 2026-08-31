@@ -32,6 +32,7 @@ step "boot + update banner"         node tools/test_boot.js
 step "monthly reset behaviour"      node tools/test_months.js
 step "tracker + outcomes"           node tools/test_tracker.js
 step "drive backend"                node tools/test_drive.js
+step "processor api pull"          node tools/test_apipull.js
 
 echo "======================================================"
 [ $fail -eq 0 ] && echo "all steps ran. Read the counts above — a step can" \

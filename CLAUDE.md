@@ -317,6 +317,42 @@ The last row is the whole reason for the scope. The PATCH was written back
 byte-identical, so the folder was not altered by the test, and the probe file
 created for the create-test was removed with a 204. Nothing here is assumed.
 
+## Pulling from a processor API
+
+Added 2026.09.17. Settings holds one or more processor connections so a report
+can be pulled straight from the processor instead of the portal. `PROCESSOR`
+owns it. The whole design turns on one fact: **this app is a public static
+file, so a key can never be in the source or the repo.**
+
+- **Keys live in `localStorage` only** (`cbrc.api.v1`), typed by the operator
+  at runtime, exactly like the Drive client-ID override. Never committed, never
+  shared between users — each person who pulls needs their own key. The Settings
+  list shows the value only as a masked length; `test_apipull.js` asserts the
+  rendered panel never contains the raw key.
+- **Header placement is the default and a key never lands in the URL** unless
+  the operator explicitly picks query placement — a key in a URL leaks into
+  history and logs. `buildRequest()` enforces this; a test asserts a header key
+  is absent from the built URL.
+- **`test()` names every outcome, and CORS is its own outcome.** A `fetch`
+  rejection (the browser refusing a cross-origin read) is reported as CORS with
+  "a valid key cannot fix this", separate from a real 401/403 which says the key
+  was rejected. This matters because the fixes are different and conflating them
+  wastes hours. Financial APIs are built server-to-server and usually do **not**
+  send `Access-Control-Allow-Origin`, so CORS is the likely wall — surfaced, not
+  pretended away.
+- **`mapText()` refuses non-CSV rather than guessing.** Portal-shaped CSV flows
+  straight through `loadSnapshot`; JSON or anything else returns a clear "share
+  one real response and the mapping gets built here". Turning a real processor
+  response into scored rows is the one processor-specific piece and it waits for
+  a real response — hard rule 1 (never fabricate a figure) applies.
+- Multiple connections and a key-plus-secret/merchant-id via the `extra` array.
+
+**Not yet done, on purpose:** no working end-to-end pull, because (a) CORS may
+block every real call and only a live endpoint reveals it, and (b) the response
+mapping needs one real response. The Settings input, storage, request-building
+and Test are complete and tested; the mapping and the "pull into the library"
+button land once a processor answers.
+
 ## The tracker
 
 Which deals the team is acting on, and whether the action worked. Added

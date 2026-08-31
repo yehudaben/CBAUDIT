@@ -466,6 +466,31 @@ table.mt .who .mid{color:var(--muted);font-size:var(--fs-xs);font-variant-numeri
 .trkst.ro span.on{display:inline-block;background:var(--ink);color:var(--page);
   font-size:var(--fs-xs);font-weight:600;padding:3px 7px;border-radius:var(--r-sm)}
 .rolelab{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+/* ---- processor API connections (Settings) ---- */
+.apiwrap{display:flex;flex-direction:column;gap:10px;margin:6px 0 4px}
+.conn{border:1px solid var(--axis);border-radius:var(--r-sm);background:var(--surface);padding:10px 12px}
+.conn .connhd{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.conn .connhd b{font-size:var(--fs)}
+.conn .cu{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:var(--fs-xs);color:var(--muted);
+  overflow-wrap:anywhere}
+.conn .connhd .sp{flex:1}
+.connmeta{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:7px;font-size:var(--fs-xs)}
+.connmeta .k{color:var(--ink2);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.connmeta .v{color:var(--muted);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.connst{margin-top:8px;font-size:var(--fs-sm);line-height:1.5;padding:8px 10px;border-radius:var(--r-sm);
+  background:var(--wash2)}
+.connst.v-ok{color:var(--good)} .connst.v-no{color:var(--gen-ink)} .connst.v-wt{color:var(--ink2)}
+.connst .snip{display:block;margin-top:6px;font-size:var(--fs-xs);color:var(--muted);
+  white-space:pre-wrap;overflow-wrap:anywhere;max-height:80px;overflow:auto}
+.connform{border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--surface);
+  padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.connform .frow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.connform label{min-width:120px;font-size:var(--fs-sm);color:var(--ink2)}
+.connform input,.connform select{padding:5px 8px;border:1px solid var(--axis);border-radius:var(--r-sm);
+  background:var(--page);color:var(--ink);font:inherit;font-size:var(--fs-sm)}
+.connform input[type=text],.connform input[type=password]{flex:1;min-width:180px}
+.connform .fracts{display:flex;gap:8px;margin-top:2px}
+.apiacts{margin-top:2px}
 .trkhead{display:flex;gap:calc(6px*var(--d));align-items:center;flex-wrap:wrap;
   margin:calc(10px*var(--d)) 0 calc(6px*var(--d))}
 .trkhead .sp{flex:1}
@@ -894,7 +919,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.16";
+const APP_VERSION   = "2026.09.17";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2544,6 +2569,152 @@ const DRIVE_IO = {
 };
 
 /* ============================================================
+   PROCESSOR — pull a report straight from a processor's API.
+
+   The design constraint that shapes everything: this app is a PUBLIC static
+   file. So an API key can never live in the source or the repo — it is typed
+   by the operator at runtime and kept in localStorage on THAT browser only,
+   exactly like the Drive client-ID override. It is never committed, never
+   shared between users, and never sent anywhere except the exact URL the
+   operator configured.
+
+   Two things are outside our control and are surfaced honestly rather than
+   pretended away:
+
+     CORS   a browser may not read a cross-origin response unless the API
+            sends Access-Control-Allow-Origin for this site. Financial APIs
+            usually do not, because they are built for server-to-server use.
+            test() reports this as its own distinct outcome instead of a
+            generic failure, because the fix is different (a proxy or the
+            processor allowing the origin), not "wrong key".
+
+     SHAPE  the response is whatever the processor returns, not the portal's
+            18-column CSV. mapText() is where that becomes rows; until a real
+            response is seen it passes CSV through and refuses JSON with a
+            clear message, rather than guessing a mapping and inventing data.
+
+   Multiple connections are supported ("may need more than one key"): each is
+   a named endpoint with its own auth, so one processor's key and another's
+   live side by side, and a single processor needing a key PLUS a secret or a
+   merchant id is just a connection with extra fields.
+   ============================================================ */
+const PROCESSOR = {
+  LS:"cbrc.api.v1",
+  conns:null,
+
+  load(){
+    if(this.conns) return this.conns;
+    try{ this.conns = JSON.parse(localStorage.getItem(this.LS)||"[]"); }catch(e){ this.conns=[]; }
+    if(!Array.isArray(this.conns)) this.conns=[];
+    return this.conns;
+  },
+  save(){
+    try{ localStorage.setItem(this.LS, JSON.stringify(this.conns||[])); }catch(e){}
+  },
+  /* ids are local and only need to be unique within this browser; a counter
+     off the current length plus a suffix avoids Date.now()/random which are
+     banned elsewhere in the codebase and pointless here */
+  newId(){
+    let n = (this.load().length)+1, id;
+    do{ id = "c"+n; n++; } while(this.conns.some(c=>c.id===id));
+    return id;
+  },
+  add(conn){
+    this.load();
+    const c = Object.assign({
+      id:this.newId(), name:"", url:"", method:"GET",
+      authIn:"header", authName:"Authorization", authPrefix:"Bearer ", authValue:"",
+      extra:[]     /* [{in:"header"|"query", name, value}] — a secret, merchant id, etc */
+    }, conn||{});
+    this.conns.push(c); this.save(); return c;
+  },
+  update(id, patch){
+    this.load();
+    const c = this.conns.find(c=>c.id===id);
+    if(c){ Object.assign(c, patch); this.save(); }
+    return c;
+  },
+  remove(id){
+    this.load();
+    this.conns = this.conns.filter(c=>c.id!==id); this.save();
+  },
+  get(id){ return this.load().find(c=>c.id===id) || null; },
+
+  /* Build the actual request without ever putting the key in the URL unless
+     the operator explicitly chose query placement — a key in a URL leaks into
+     history and logs, so header is the default and the safer path. */
+  buildRequest(conn){
+    const url = new URL(conn.url);
+    const headers = {"Accept":"application/json, text/csv, */*"};
+    const put = (loc, name, value, prefix)=>{
+      if(!name) return;
+      if(loc==="query") url.searchParams.set(name, (prefix||"")+value);
+      else headers[name] = (prefix||"")+value;
+    };
+    put(conn.authIn, conn.authName, conn.authValue||"", conn.authPrefix||"");
+    (conn.extra||[]).forEach(x=> put(x.in||"header", x.name, x.value||"", ""));
+    return {url:url.toString(), opts:{method:conn.method||"GET", headers}};
+  },
+
+  /* One request, every outcome named. The CORS case is the important one:
+     a TypeError from fetch with the response unreadable is the browser
+     refusing a cross-origin read, which is a different problem from the key
+     being wrong (that comes back as a real 401/403 status). */
+  async test(conn){
+    if(!conn.url) return {kind:"config", msg:"Add the endpoint URL first."};
+    let req;
+    try{ req = this.buildRequest(conn); }
+    catch(e){ return {kind:"config", msg:"That URL is not valid: "+(e.message||e)}; }
+    try{
+      const r = await fetch(req.url, req.opts);
+      const ct = r.headers.get("content-type")||"";
+      const body = await r.text();
+      if(!r.ok) return {kind:"http", status:r.status, contentType:ct,
+                        snippet:body.slice(0,300),
+                        msg:`The API answered ${r.status}. `+(
+                          r.status===401||r.status===403
+                            ? "The key was reached but rejected — wrong key, or it lacks access."
+                            : "Reached, but it did not return the report.")};
+      return {kind:"ok", status:r.status, contentType:ct, bytes:body.length,
+              snippet:body.slice(0,300),
+              looksCsv:/text\/csv/.test(ct) || /^\s*"?[A-Za-z].*,.*\r?\n/.test(body),
+              msg:`Reached and answered ${r.status} with ${body.length.toLocaleString("en-US")} bytes.`};
+    }catch(e){
+      /* fetch rejects (not resolves) on a CORS block, and the error carries
+         nothing readable — the browser hides everything cross-origin */
+      return {kind:"cors",
+        msg:"The browser could not read a response from that host. Almost always this is CORS: "
+           +"the processor has not allowed this site to call it from a browser. A valid key "
+           +"cannot fix this — it needs the processor to permit this origin, or a small proxy. "
+           +"(It can also mean the host is unreachable.)",
+        raw:String(e && e.message || e)};
+    }
+  },
+
+  /* Turn a fetched body into rows the app can score. Deliberately conservative:
+     CSV in the portal's shape flows straight through loadSnapshot; anything
+     else is refused by name rather than mis-parsed. When a real processor
+     response is in hand, its mapping goes HERE and nowhere else. */
+  mapText(body, contentType){
+    const ct = contentType||"";
+    const looksCsv = /text\/csv/.test(ct) || /^\s*"?[A-Za-z].*,.*\r?\n/.test(body);
+    if(looksCsv) return {csv:body};
+    return {error:"The response is not portal-shaped CSV, so it cannot be scored yet. "
+      +"Share one real response and the mapping for this processor gets built here."};
+  },
+  async pull(conn){
+    const req = this.buildRequest(conn);
+    const r = await fetch(req.url, req.opts);
+    const ct = r.headers.get("content-type")||"";
+    const body = await r.text();
+    if(!r.ok){ const e=new Error(`API answered ${r.status}`); e.status=r.status; e.snippet=body.slice(0,300); throw e; }
+    const m = this.mapText(body, ct);
+    if(m.error){ const e=new Error(m.error); e.mapping=true; throw e; }
+    return {csv:m.csv, name:(conn.name||"processor")+"-pull.csv"};
+  }
+};
+
+/* ============================================================
    TRACKER — which deals the team is acting on, and whether it worked.
 
    State is a log of events, never a document. Each browser appends only to
@@ -3766,9 +3937,91 @@ function folderAccessHTML(){
 function settingsPageHTML(A){
   return `<div class="setwrap">
     ${modelPanelHTML(A)}
+    <h2 id="s-api">Pull from processor<span class="n">your keys, kept in this browser only — never in the app or shared</span></h2>
+    ${processorPanelHTML()}
     <h2 id="s-design">Appearance<span class="n">affects looks only, never the numbers</span></h2>
     ${designPanelHTML(true)}
     ${exportPreviewHTML()}
+  </div>`;
+}
+
+/* The key never leaves localStorage on this machine. The value field is a
+   password input and the saved value is shown only as a masked length, so a
+   shoulder-surfer or a screenshot does not carry it. */
+function apiMask(v){ v=String(v||""); return v ? "•".repeat(Math.min(v.length,12))+(v.length>12?"…":"") : "—"; }
+function connRowHTML(c){
+  const st = PROCESSOR._status && PROCESSOR._status[c.id];
+  const stCls = st ? ({ok:"v-ok",cors:"v-no",http:"v-no",config:"v-wt"}[st.kind]||"v-wt") : "";
+  return `<div class="conn" data-conn="${esc(c.id)}">
+    <div class="connhd">
+      <b>${esc(c.name||"Untitled connection")}</b>
+      <span class="cu">${esc(c.method||"GET")} ${esc(c.url||"(no URL yet)")}</span>
+      <span class="sp"></span>
+      <button class="btn sm" data-apitest="${esc(c.id)}">Test</button>
+      <button class="btn sm" data-apiedit="${esc(c.id)}">Edit</button>
+      <button class="btn sm" data-apidel="${esc(c.id)}">Remove</button>
+    </div>
+    <div class="connmeta">
+      <span class="k">${esc(c.authIn==="query"?"query":"header")} ${esc(c.authName||"—")}</span>
+      <span class="v">${apiMask(c.authValue)}</span>
+      ${(c.extra||[]).map(x=>`<span class="k">${esc(x.in||"header")} ${esc(x.name||"—")}</span>
+        <span class="v">${apiMask(x.value)}</span>`).join("")}
+    </div>
+    ${st?`<div class="connst ${stCls}">${esc(st.msg)}${st.snippet?`
+      <code class="snip">${esc(st.snippet)}</code>`:""}</div>`:""}
+  </div>`;
+}
+function connFormHTML(c){
+  const x0 = (c.extra&&c.extra[0]) || {in:"header",name:"",value:""};
+  return `<div class="connform" data-form="${esc(c.id)}">
+    <div class="frow"><label>Name</label>
+      <input type="text" data-f="name" value="${esc(c.name||"")}" placeholder="e.g. Acme processor — chargebacks"></div>
+    <div class="frow"><label>Endpoint URL</label>
+      <input type="text" data-f="url" spellcheck="false" value="${esc(c.url||"")}"
+        placeholder="https://api.processor.com/v1/chargebacks?from=…"></div>
+    <div class="frow"><label>Key goes in</label>
+      <select data-f="authIn">
+        <option value="header"${c.authIn!=="query"?" selected":""}>a request header</option>
+        <option value="query"${c.authIn==="query"?" selected":""}>the URL (query param)</option>
+      </select>
+      <input type="text" data-f="authName" value="${esc(c.authName||"Authorization")}"
+        placeholder="header/param name" style="max-width:180px">
+      <input type="text" data-f="authPrefix" value="${esc(c.authPrefix||"")}"
+        placeholder="prefix e.g. Bearer " style="max-width:120px">
+    </div>
+    <div class="frow"><label>Key value</label>
+      <input type="password" data-f="authValue" autocomplete="off" spellcheck="false"
+        value="${esc(c.authValue||"")}" placeholder="paste your key — stays in this browser"></div>
+    <div class="frow"><label>Second field <span class="out">optional — a secret, merchant id…</span></label>
+      <select data-f="x0in">
+        <option value="header"${x0.in!=="query"?" selected":""}>header</option>
+        <option value="query"${x0.in==="query"?" selected":""}>query</option>
+      </select>
+      <input type="text" data-f="x0name" value="${esc(x0.name||"")}" placeholder="name" style="max-width:180px">
+      <input type="password" data-f="x0value" autocomplete="off" value="${esc(x0.value||"")}"
+        placeholder="value" style="max-width:200px"></div>
+    <div class="fracts">
+      <button class="btn p sm" data-apisave="${esc(c.id)}">Save connection</button>
+      <button class="btn sm" data-apicancel="${esc(c.id)}">Cancel</button>
+    </div>
+  </div>`;
+}
+function processorPanelHTML(){
+  const conns = PROCESSOR.load();
+  const editing = PROCESSOR._editing;
+  const rows = conns.map(c=> c.id===editing ? connFormHTML(c) : connRowHTML(c)).join("");
+  return `<div class="apiwrap">
+    ${conns.length? rows : `<p class="note">No processor connections yet.</p>`}
+    ${editing==="__new__" ? connFormHTML({id:"__new__"}) : ""}
+    <div class="apiacts">
+      ${editing? "" : `<button class="btn sm" id="btnApiAdd">Add a connection</button>`}
+    </div>
+    <p class="note"><b>Two honest limits.</b> A key here lives only in this browser's storage — it is
+      never put in the app, in git, or shared with the team, so each person who pulls needs their own.
+      And a browser can only read a processor's API if that processor allows this site to call it
+      (CORS); many financial APIs do not, and no key can override that — <b>Test</b> tells you which
+      wall you are at. Turning a real response into scored rows is the last step and needs one real
+      response to build against.</p>
   </div>`;
 }
 
@@ -4179,6 +4432,45 @@ function wireViews(){
     toast(DRIVE_IO.available() ? "Google Drive sign-in is now available."
                                : "Google Drive option hidden.");
   };
+
+  /* ---- processor API connections ---- */
+  const apiAdd=$("#btnApiAdd");
+  if(apiAdd) apiAdd.onclick=()=>{ PROCESSOR._editing="__new__"; render(); };
+  const readForm = id => {
+    const f = document.querySelector(`.connform[data-form="${CSS.escape(id)}"]`);
+    if(!f) return null;
+    const val = k => { const el=f.querySelector(`[data-f="${k}"]`); return el?el.value:""; };
+    const extra=[];
+    if(val("x0name")) extra.push({in:val("x0in")||"header", name:val("x0name"), value:val("x0value")});
+    return {name:val("name").trim(), url:val("url").trim(), method:"GET",
+            authIn:val("authIn"), authName:val("authName").trim(),
+            authPrefix:val("authPrefix"), authValue:val("authValue"), extra};
+  };
+  document.querySelectorAll("[data-apiedit]").forEach(b=>b.onclick=()=>{
+    PROCESSOR._editing=b.getAttribute("data-apiedit"); render(); });
+  document.querySelectorAll("[data-apicancel]").forEach(b=>b.onclick=()=>{
+    PROCESSOR._editing=null; render(); });
+  document.querySelectorAll("[data-apidel]").forEach(b=>b.onclick=()=>{
+    PROCESSOR.remove(b.getAttribute("data-apidel"));
+    if(PROCESSOR._status) delete PROCESSOR._status[b.getAttribute("data-apidel")];
+    render(); toast("Connection removed.");
+  });
+  document.querySelectorAll("[data-apisave]").forEach(b=>b.onclick=()=>{
+    const id=b.getAttribute("data-apisave"), patch=readForm(id);
+    if(!patch){ return; }
+    if(!patch.name || !patch.url){ showErr("A connection needs at least a name and an endpoint URL."); return; }
+    if(id==="__new__") PROCESSOR.add(patch); else PROCESSOR.update(id, patch);
+    PROCESSOR._editing=null; render(); toast("Connection saved in this browser.");
+  });
+  document.querySelectorAll("[data-apitest]").forEach(b=>b.onclick=async()=>{
+    const id=b.getAttribute("data-apitest"), c=PROCESSOR.get(id);
+    if(!c) return;
+    b.disabled=true; const was=b.textContent; b.textContent="Testing…";
+    const res = await PROCESSOR.test(c);
+    PROCESSOR._status = PROCESSOR._status || {}; PROCESSOR._status[id]=res;
+    b.disabled=false; b.textContent=was;
+    render();
+  });
   const rSel=$("#roleSel");
   if(rSel) rSel.onchange=async()=>{ FOLDER.setRolePref(rSel.value); await roleChanged(); };
   const rProbe=$("#btnRoleProbe");
@@ -5511,6 +5803,16 @@ window.__driveConnect = async folderId => {
   render();
   return {name:FOLDER.name, backend:FOLDER.backend(),
           role:FOLDER.role(), access:FOLDER.access};
+};
+window.__api = {
+  reset(){ try{ localStorage.removeItem(PROCESSOR.LS); }catch(e){} PROCESSOR.conns=null; PROCESSOR._status=null; PROCESSOR._editing=null; },
+  list(){ return PROCESSOR.load().map(c=>({id:c.id,name:c.name,url:c.url,authIn:c.authIn,
+            authName:c.authName,hasValue:!!c.authValue,extra:(c.extra||[]).length})); },
+  add(c){ return PROCESSOR.add(c).id; },
+  built(id){ return PROCESSOR.buildRequest(PROCESSOR.get(id)); },
+  async test(id){ const r=await PROCESSOR.test(PROCESSOR.get(id)); return r; },
+  map(body,ct){ return PROCESSOR.mapText(body,ct); },
+  raw(){ try{ return localStorage.getItem(PROCESSOR.LS); }catch(e){ return null; } }
 };
 window.__driveState = () => ({
   available:DRIVE_IO.available(), scopes:DRIVE_IO.SCOPES,

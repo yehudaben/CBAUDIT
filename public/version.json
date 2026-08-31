@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.16",
+  "version": "2026.09.17",
   "model": "m1.0",
-  "notes": "Each outcome now carries a chart of the metric its action is judged by, across every report, with a dashed rule where the fix landed — so before and after read as a shape rather than two numbers."
+  "notes": "Settings can now hold one or more processor API connections — your keys, kept in this browser only, never in the app or shared. A Test button says honestly whether the browser can even reach the API (CORS is usually the wall)."
 }
