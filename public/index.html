@@ -796,6 +796,18 @@ table.mt .grp{font-size:var(--fs-xs);color:var(--muted)}
 .dprow{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
 .dprow input{padding:5px 8px;border:1px solid var(--axis);border-radius:var(--r-sm);
   background:var(--surface);color:var(--ink);font:inherit;font-size:var(--fs-sm)}
+/* ---- paste-a-report overlay ---- */
+.pastewrap{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;padding:20px}
+.pastebox{background:var(--surface);border:1px solid var(--axis);border-radius:var(--r);
+  box-shadow:0 12px 40px rgba(0,0,0,.3);width:min(720px,100%);max-height:86vh;
+  display:flex;flex-direction:column;padding:18px 20px}
+.pasteh{font-weight:700;font-size:var(--fs-lg)}
+.pastesub{color:var(--ink2);font-size:var(--fs-sm);margin:4px 0 12px}
+.pastear{flex:1;min-height:240px;resize:vertical;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:var(--fs-xs);line-height:1.5;padding:10px 12px;border:1px solid var(--axis);
+  border-radius:var(--r-sm);background:var(--page);color:var(--ink);white-space:pre;overflow:auto}
+.pasteacts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .dsub{font-size:var(--fs-sm);color:var(--ink2);margin-top:2px;line-height:1.5}
 .dsub code{background:var(--wash2);padding:1px 5px;border-radius:4px;font-size:var(--fs-xs)}
 .dacts{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
@@ -919,7 +931,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.17";
+const APP_VERSION   = "2026.09.18";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -3125,7 +3137,8 @@ function dataStripHTML(){
              or drop the files in. Chrome or Edge can remember the folder between visits.`}</div></div>
       <div class="dacts">${driveBtnHTML(true)}
         <button class="btn" id="btnDirFallback">Open a folder</button>
-        <button class="btn" id="btnPickFiles">Choose files</button></div></div>
+        <button class="btn" id="btnPickFiles">Choose files</button>
+        <button class="btn" id="btnPaste">Paste report</button></div></div>
       ${drivePanelHTML()}
       <div class="dhint">Or drag CSV files anywhere on this page.</div></div>`;
   }
@@ -3135,7 +3148,8 @@ function dataStripHTML(){
       <div class="dmain"><div class="dtitle">Point this at your reports folder</div>
         <div class="dsub">Exports in, audits out. Chosen once and remembered.</div></div>
       <div class="dacts"><button class="btn p big" id="btnConnect">Choose folder</button>
-        ${driveBtnHTML(false)}</div>
+        ${driveBtnHTML(false)}
+        <button class="btn" id="btnPaste">Paste report</button></div>
       </div>
       ${drivePanelHTML()}
       <ol class="steps">
@@ -3208,6 +3222,7 @@ function dataStripHTML(){
     <div class="dacts">
       ${FS_OK?`<button class="btn p" id="btnConnect">Choose folder</button>`:""}
       <button class="btn" id="btnPickFiles">Add files</button>
+      <button class="btn" id="btnPaste">Paste report</button>
       <button class="btn" id="btnClearLib">Remove all</button></div></div>
     ${n?`<div class="dtabs">${tabs}</div>`:""}</div>`;
 }
@@ -3233,6 +3248,7 @@ function renderDataStrip(){
   on("#btnRescan", loadFromFolder);
   on("#btnSaveFolder", saveCurrentToFolder);
   on("#btnPickFiles", ()=>$("#fileA").click());
+  on("#btnPaste", openPasteBox);
   on("#btnDirFallback", pickFolderFallback);
   on("#btnGrant", async()=>{
     if(await FOLDER.grant()) await loadFromFolder();
@@ -5536,6 +5552,57 @@ function ingestFiles(files){
   }
 }
 
+/* ---- paste a report straight in (the bookmarklet's landing spot) ----
+   The portal renders the report client-side and its download just reflects
+   what the page already holds. A one-click bookmarklet on the portal copies
+   that CSV to the clipboard; this is where it lands — no file, no folder, no
+   credential. Also the manual path for anyone who copies a CSV by hand. */
+function ingestText(csv, name){
+  name = name || "pasted-report.csv";
+  if(!csv || !String(csv).trim()){ showErr("Nothing to load — the paste was empty."); return {ok:false}; }
+  try{
+    const snap = loadSnapshot(String(csv), name);
+    const r = addSnapshot(snap);
+    focusNewest([r.id]); renderDataStrip(); syncActive(); render(); clearErr();
+    toast(r.replaced ? "Report refreshed from paste." : "Report loaded from paste.");
+    return {ok:true, replaced:!!r.replaced, rows:snap.rows.length};
+  }catch(err){
+    const msg = err && err.isAudit
+      ? "That is an audit this tool produced, not a portal export."
+      : (err && err.message) || String(err);
+    showErr("Could not load the pasted report: "+msg);
+    return {ok:false, msg};
+  }
+}
+function openPasteBox(){
+  const old = document.getElementById("pastewrap"); if(old) old.remove();
+  const wrap = document.createElement("div");
+  wrap.id = "pastewrap"; wrap.className = "pastewrap";
+  const box = document.createElement("div"); box.className = "pastebox";
+  const h = document.createElement("div"); h.className = "pasteh";
+  h.textContent = "Paste report from the portal";
+  const sub = document.createElement("div"); sub.className = "pastesub";
+  sub.textContent = "Click the portal bookmark first to copy the report, then paste here (⌘V).";
+  const ta = document.createElement("textarea"); ta.className = "pastear";
+  ta.setAttribute("placeholder", '"Bckt","Merch.","DBA","MID", …');
+  const acts = document.createElement("div"); acts.className = "pasteacts";
+  const load = document.createElement("button"); load.className = "btn p"; load.textContent = "Load report";
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel";
+  const close = ()=> wrap.remove();
+  cancel.onclick = close;
+  wrap.onclick = e=>{ if(e.target===wrap) close(); };
+  load.onclick = ()=>{ const r = ingestText(ta.value, "portal-paste.csv"); if(r.ok) close(); };
+  acts.appendChild(load); acts.appendChild(cancel);
+  box.appendChild(h); box.appendChild(sub); box.appendChild(ta); box.appendChild(acts);
+  wrap.appendChild(box); document.body.appendChild(wrap);
+  ta.focus();
+  /* prefill from the clipboard when the browser allows a silent read — if it
+     refuses (the common case), the box just waits for a manual paste */
+  if(navigator.clipboard && navigator.clipboard.readText){
+    navigator.clipboard.readText().then(t=>{ if(t && !ta.value) ta.value=t; }, ()=>{});
+  }
+}
+
 /* folder-picker fallback: reads every CSV in a chosen folder once */
 (function(){
   const inp=$("#fileDir");
@@ -5622,6 +5689,8 @@ if(DRIVE_IO.available()) DRIVE_IO.loadGis().catch(()=>{});
 })();
 
 /* expose for automated checks */
+window.__paste = (csv,name)=> ingestText(csv, name||"paste-test.csv");
+window.__openPaste = ()=>{ openPasteBox(); return !!document.getElementById("pastewrap"); };
 window.__loadForTest = (text,name)=>{
   const snap=loadSnapshot(text,name);
   const r=addSnapshot(snap); focusNewest([r.id]);

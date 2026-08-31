@@ -317,6 +317,26 @@ The last row is the whole reason for the scope. The PATCH was written back
 byte-identical, so the folder was not altered by the test, and the probe file
 created for the create-test was removed with a 204. Nothing here is assumed.
 
+## Paste a report / the portal bookmarklet
+
+Added 2026.09.18. The portal renders its report client-side and the "download"
+button just reflects what the page already holds (the POST body to
+`download.jsp` carries the whole CSV in a `data` field). So a one-click
+bookmarklet on the portal report page reads that CSV and copies it to the
+clipboard; the console's **Paste report** button (`openPasteBox` → `ingestText`)
+loads it. No file, no folder, no credential — it rides the operator's existing
+portal login.
+
+- `ingestText(csv, name)` is the single-string twin of `ingestFiles`: one
+  `loadSnapshot` + `addSnapshot`, and it rejects a saved audit or non-portal
+  CSV by the same signature guard. `test` hook `__paste`.
+- The paste box is built with DOM APIs and `.value` (never innerHTML), so
+  pasted content cannot inject.
+- The bookmarklet selector (`form[action*="download.jsp"] [name="data"]`) was
+  inferred from the captured download POST, not verified live against the
+  portal. If it can't find the field it says so; adjust the selector when the
+  real page is in hand.
+
 ## Pulling from a processor API
 
 Added 2026.09.17. Settings holds one or more processor connections so a report

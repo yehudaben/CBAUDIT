@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.17",
+  "version": "2026.09.18",
   "model": "m1.0",
-  "notes": "Settings can now hold one or more processor API connections — your keys, kept in this browser only, never in the app or shared. A Test button says honestly whether the browser can even reach the API (CORS is usually the wall)."
+  "notes": "A Paste report button, so a one-click bookmarklet on the portal can hand the report straight to the console — no download, no file, no credential stored."
 }
