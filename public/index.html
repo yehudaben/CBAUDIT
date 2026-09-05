@@ -931,7 +931,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.18";
+const APP_VERSION   = "2026.09.19";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -3203,6 +3203,7 @@ function dataStripHTML(){
         <div class="dsub">${sub}</div></div>
       <div class="dacts">
         <button class="btn p" id="btnRescan">Reload</button>
+        <button class="btn" id="btnPaste">Paste report</button>
         ${owner?`<button class="btn" id="btnSaveFolder">Save audit</button>`:""}
         <button class="btn" id="btnConnect">Change folder</button></div></div>
       ${n?`<div class="dtabs">${tabs}</div>`:""}

@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.18",
+  "version": "2026.09.19",
   "model": "m1.0",
-  "notes": "A Paste report button, so a one-click bookmarklet on the portal can hand the report straight to the console — no download, no file, no credential stored."
+  "notes": "Paste report also on the connected-folder view \u2014 the everyday state \u2014 not just the setup cards."
 }
