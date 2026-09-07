@@ -300,6 +300,16 @@ ul.flat .dba{color:var(--ink2)}
 .zm{font-size:var(--fs-xs);color:var(--crit);font-weight:700}
 .note{font-size:var(--fs-xs);color:var(--muted);margin-top:calc(11px*var(--d));line-height:1.6}
 .empty{padding:calc(40px*var(--d)) 20px;text-align:center;color:var(--muted);font-size:var(--fs-sm)}
+/* forecast — projections are a different species from measured figures */
+.fc-proj{font-weight:700;color:var(--accent);white-space:nowrap}
+.fc-proj::before{content:"\2248 ";color:var(--muted);font-weight:600}
+.fctab .fc-proj{border-bottom:2px dotted var(--accent);padding-bottom:1px}
+.fc-range{display:block;font-size:var(--fs-xs);color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums}
+.fc-note{background:var(--surface);border:1px solid var(--grid);border-left:3px solid var(--accent);
+  border-radius:8px;padding:12px 15px;margin:0 0 calc(16px*var(--d));font-size:var(--fs-sm);
+  line-height:1.55;color:var(--ink)}
+.fc-note b{font-weight:700}
+.fc-warn{border-left-color:var(--warn)}
 
 /* ---- snapshot tabs ---- */
 .libbar{display:flex;flex-direction:column;gap:calc(8px*var(--d));
@@ -931,7 +941,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.19";
+const APP_VERSION   = "2026.09.20";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -4048,6 +4058,7 @@ function viewTabsHTML(){
     <button data-view="audit" class="${VIEW.page==="audit"?"on":""}">Audit</button>
     <button data-view="trends" class="${VIEW.page==="trends"?"on":""}">Trends
       <span class="c">${nRep} report${nRep===1?"":"s"}</span></button>
+    <button data-view="forecast" class="${VIEW.page==="forecast"?"on":""}">Forecast</button>
     <button data-view="tracker" class="${VIEW.page==="tracker"?"on":""}">Tracker
       ${(function(){const c=TRACKER.counts(), open=c.required+c.doing;
          return open?`<span class="c">${open} open</span>`:"";})()}</button>
@@ -4056,6 +4067,7 @@ function viewTabsHTML(){
     <span class="ctx">${VIEW.page==="audit"
       ? (SNAP_A && SNAP_A.stamp ? "Showing "+esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp) : "")
       : VIEW.page==="trends" ? "Across every report in the library"
+      : VIEW.page==="forecast" ? "Projected month-end, from the run-rate so far"
       : VIEW.page==="tracker" ? (FOLDER.state==="connected"
           ? "Shared through "+esc(FOLDER.name)+"/"+FOLDER.TRACK_DIR+"/"
           : "This browser only — connect a folder to share with your team")
@@ -4806,6 +4818,148 @@ function finishRender(P, A, V){
     beside the title at the top of this page.`;
 }
 
+/* ============================================================
+   FORECAST — nowcast the month-end CB % from the run-rate so far.
+
+   Turns the monthly reset into signal: within a month the counters
+   accumulate, so a mid-month snapshot is a run-rate. Chargebacks lag the sale
+   and BACK-LOAD in the month, so "today's ratio = final ratio" under-projects;
+   an accumulation curve learned from the prior COMPLETE month corrects for it:
+       projected final CB#    = current CB#    / f_cb(day)
+       projected final #Sales = current #Sales / f_sales(day)
+   Everything here is a PROJECTION, never a measured figure (hard rule 1). Each
+   carries a range, withholds on thin/early data, and never enters an export or
+   the scored actuals. It is a heads-up to confirm, not a settled number.
+   ============================================================ */
+const FC_DAYFLOOR = 6;                       // before this, too little has accrued
+
+function fcPortfolioByDay(H, periods, days){
+  if(!H.length) return [];
+  const n = H[0].pts.length, out = new Array(n).fill(null);
+  for(let si=0; si<n; si++){
+    let s=0, cb=0, any=false;
+    for(const rec of H){ const p=rec.pts[si]; if(!p) continue; any=true; s+=p.s||0; cb+=p.cb||0; }
+    if(any) out[si] = {si, s, cb, period:periods[si], day:days[si]};
+  }
+  return out;
+}
+function fcCurve(byDay, priorP){
+  const inP = byDay.filter(x=>x && x.period===priorP && x.day!=null).sort((a,b)=>a.day-b.day);
+  if(inP.length < 2) return null;
+  const fin = inP[inP.length-1];
+  if(!fin.s || !fin.cb) return null;
+  return {pts: inP.map(x=>({day:x.day, fs:x.s/fin.s, fc:x.cb/fin.cb})), finalDay:fin.day};
+}
+function fcAt(curve, day){
+  const p = curve.pts;
+  if(day<=p[0].day) return {fs:p[0].fs, fc:p[0].fc};
+  if(day>=p[p.length-1].day) return {fs:p[p.length-1].fs, fc:p[p.length-1].fc};
+  for(let i=1;i<p.length;i++) if(day<=p[i].day){
+    const a=p[i-1], b=p[i], t=(day-a.day)/(b.day-a.day);
+    return {fs:a.fs+t*(b.fs-a.fs), fc:a.fc+t*(b.fc-a.fc)};
+  }
+  return {fs:p[p.length-1].fs, fc:p[p.length-1].fc};
+}
+function forecastData(){
+  const HA = historyAt("mid"), H = HA.rows;
+  if(!H.length) return {ok:false, reason:"no-data"};
+  const byDay = fcPortfolioByDay(H, HA.periods, HA.days), present = byDay.filter(Boolean);
+  if(!present.length) return {ok:false, reason:"no-data"};
+  const lastSnap = present[present.length-1];
+  const curP = lastSnap.period, dim = daysInMonth(curP) || 30, day = lastSnap.day || null;
+  const priors = [...new Set(present.map(x=>x.period).filter(p=>p && p<curP))].sort();
+  const priorP = priors.length ? priors[priors.length-1] : null;
+  const curve  = priorP ? fcCurve(byDay, priorP) : null;
+  const ceil = MODEL.f5Cbp, thin = MODEL.thinSales;
+  const frac = curve ? fcAt(curve, day) : {fs:(day&&dim)?day/dim:1, fc:(day&&dim)?day/dim:1};
+
+  const rows = [];
+  H.forEach(rec=>{
+    const last = rec.last;
+    if(!last || rec.period!==curP) return;
+    const s=last.s, cb=last.cb, cur = s>0 ? cb/s*100 : null;
+    let ps, pcb;
+    if(curve && frac.fs>0 && frac.fc>0){ ps=s/frac.fs; pcb=cb/frac.fc; }
+    else { ps=s; pcb=cb; }
+    const proj = ps>0 ? pcb/ps*100 : null;
+    const elapsed = curve ? frac.fs : ((day&&dim)?day/dim:1);
+    const volPen = Math.min(1, Math.sqrt(thin/Math.max(ps,1)));
+    const halfw = proj==null ? null : proj*(0.15 + 0.6*(1-elapsed) + 0.25*volPen);
+    const lo = proj==null?null:Math.max(0,proj-halfw), hi = proj==null?null:proj+halfw;
+    let klass;
+    if(proj==null) klass="nosale";
+    else if(ps<thin) klass="thin";
+    else if(cur!=null && cur>ceil) klass="already";
+    else if(lo!=null && lo>ceil) klass="forming";
+    else if(proj>ceil) klass="watch";
+    else klass="ok";
+    rows.push({mid:rec.id, name:rec.m, dba:rec.d, s, cb, cur, proj, lo, hi, klass});
+  });
+  const counts = {};
+  rows.forEach(r=> counts[r.klass]=(counts[r.klass]||0)+1);
+  return {ok:true, curP, day, dim, priorP, curveOk:!!curve,
+          curDaysSeen: present.filter(x=>x.period===curP).length,
+          rows, counts, ceil, thin};
+}
+function forecastPageHTML(){
+  const F = forecastData();
+  if(!F.ok || !F.rows.length)
+    return `<div class="fcwrap"><h2>Forecast</h2>
+      <div class="callout na"><b>Not enough loaded to project.</b> The forecast reads the current
+      month's run-rate against a complete prior month. Load a few dated reports and it fills in.</div></div>`;
+  const pl = periodLabel(F.curP), monthDone = F.day && F.day>=F.dim, early = F.day && F.day<FC_DAYFLOOR;
+  if(monthDone)
+    return `<div class="fcwrap"><h2>Forecast <span class="n">${esc(pl)}</span></h2>
+      <div class="callout na"><b>${esc(pl)} is complete (day ${F.day} of ${F.dim}).</b> Nothing is left
+      to project — the Audit tab holds the final figures. Load the next month's first reports to forecast it.</div></div>`;
+
+  const forming = F.rows.filter(r=>r.klass==="forming").sort((a,b)=>b.proj-a.proj);
+  const watch   = F.rows.filter(r=>r.klass==="watch").sort((a,b)=>b.proj-a.proj);
+  const already = F.rows.filter(r=>r.klass==="already").sort((a,b)=>(b.cur||0)-(a.cur||0));
+
+  const basis = F.curveOk
+    ? `Projected with an accumulation curve learned from ${esc(periodLabel(F.priorP))} — its full month.`
+    : `<b>No complete prior month is loaded</b>, so this holds today's rate flat. That under-reads
+       back-loaded chargebacks (they cluster late), so real breaches may be under-called. Load a full
+       prior month for a proper curve.`;
+  const note = `<div class="fc-note ${F.curveOk?"":"fc-warn"}">
+    <b>These are projections, not measured figures.</b> ${esc(pl)}, day ${F.day||"?"} of ${F.dim}. ${basis}
+    Ranges show the uncertainty; thin and early merchants are withheld. Not yet validated against your
+    own book — a heads-up to confirm, never a settled number.</div>`;
+
+  const projCell = r => `<span class="fc-proj">${r.proj.toFixed(2)}%</span>`
+    + `<span class="fc-range">band ${r.lo.toFixed(1)}–${r.hi.toFixed(1)}%</span>`;
+  const tbl = (list,label) => !list.length ? "" : `<h2>${label} <span class="n">${list.length}</span></h2>
+    <div class="scroll"><table class="fctab"><thead><tr>
+      <th class="na">Merchant</th><th class="n na">CB % now</th>
+      <th class="n na">Projected month-end</th><th class="n na">Sales so far</th></tr></thead><tbody>
+    ${list.map(r=>`<tr>
+      <td class="who"><span class="nm">${esc(r.name)}</span><br><span class="mid">${esc(r.mid)}</span></td>
+      <td class="n">${r.cur==null?"—":r.cur.toFixed(2)+"%"}</td>
+      <td class="n">${projCell(r)}</td>
+      <td class="n">${fmtN(r.s)}</td></tr>`).join("")}
+    </tbody></table></div>`;
+
+  return `<div class="fcwrap">
+    <h2>Forecast <span class="n">${esc(pl)} month-end</span></h2>
+    ${note}
+    ${early?`<div class="fc-note fc-warn"><b>Only day ${F.day} of ${F.dim}.</b> This early little has
+      accrued, so projections are wide and low-confidence — they firm up past mid-month.</div>`:""}
+    <div class="tiles">
+      <div class="tile c"><div class="lab">Forming — over ${F.ceil}%</div>
+        <div class="val">${forming.length}</div><div class="sub">clean now, projected to breach</div></div>
+      <div class="tile"><div class="lab">Watch</div><div class="val">${watch.length}</div>
+        <div class="sub">projected over, not yet confident</div></div>
+      <div class="tile"><div class="lab">Already over</div><div class="val">${already.length}</div>
+        <div class="sub">over ${F.ceil}% today</div></div>
+    </div>
+    ${forming.length ? tbl(forming,"Forming — get ahead of these")
+      : `<div class="callout"><b>Nothing clean is projected to newly breach ${F.ceil}%</b> on the reports loaded.</div>`}
+    ${tbl(watch,"Watch — projected over, confirm as the month fills")}
+    ${tbl(already,"Already over "+F.ceil+"% today")}
+  </div>`;
+}
+
 function render(){
   clearErr();
   if(!SNAP_A){ $("#out").innerHTML='<div class="empty">Load today\'s report to generate the audit.</div>'; return; }
@@ -4823,6 +4977,11 @@ function render(){
 
   if(VIEW.page==="trends"){
     add(trendsPageHTML());
+    finishRender(P, A, V);
+    return;
+  }
+  if(VIEW.page==="forecast"){
+    add(forecastPageHTML());
     finishRender(P, A, V);
     return;
   }
@@ -5909,6 +6068,7 @@ window.__midTrend = () => {
 };
 window.__setMT = o => { Object.assign(MT,o); render(); };
 window.__setView = v => { VIEW.page=v; render(); };
+window.__forecast = () => forecastData();
 window.__modelState = () => JSON.parse(JSON.stringify(MODEL));
 window.__setBuckets = names => {
   VIEW.buckets = names ? new Set(names) : null; render();

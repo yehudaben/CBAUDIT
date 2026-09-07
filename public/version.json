@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.19",
+  "version": "2026.09.20",
   "model": "m1.0",
-  "notes": "Paste report also on the connected-folder view \u2014 the everyday state \u2014 not just the setup cards."
+  "notes": "Forecast tab \u2014 nowcast the month-end CB % from the run-rate, clearly marked as projection."
 }

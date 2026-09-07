@@ -596,6 +596,52 @@ The tracker export is **27 columns**: the workbook's own first 20, unchanged,
 then Status, Done on, Measured by, Baseline, Now, Verdict, Days since. It is a
 separate export — the 21-column audit export is untouched by all of it.
 
+## The Forecast page
+
+Added 2026.09.20. A nowcast of the month-end CB % from the run-rate so far —
+the "get ahead of it" view. `VIEW.page==="forecast"`, `forecastData()` +
+`forecastPageHTML()`, nav button between Trends and Tracker, test hook
+`__forecast`.
+
+- **It turns the monthly reset into signal.** Within a month the counters
+  accumulate, so a mid-month snapshot is a run-rate. Chargebacks lag the sale
+  and **back-load** in the month, so "today's ratio = final ratio"
+  under-projects. The fix is an **accumulation curve** learned from the prior
+  COMPLETE month (`fcCurve`): `f_cb(day)`, `f_sales(day)` = the fraction of that
+  month's final portfolio totals in by each day. Then
+  `projected final CB# = current CB# / f_cb(day)`, same for sales, ratio of the
+  two. The curve is **portfolio-level**, so a merchant that back-loads harder
+  than the average is under-projected — a real limitation, not a bug.
+- **`historyAt("mid")` returns `{stamps, periods, days, rows}`, not an array.**
+  Read `.rows`; take `periods`/`days` from the same object. Treating the return
+  as an array (`.length`) silently yields "no-data" every time — that was the
+  first bug in this feature.
+- **Hard rule 1 is the whole design.** A projection is never a measured figure:
+  rendered with a distinct style (`.fc-proj`, blue, dotted, `≈` prefix), always
+  with a range (`lo`–`hi`), and it **never** enters an export or the scored
+  actuals. The page banner says "projections, not measured figures … not yet
+  validated against your own book".
+- **Honest gates, same discipline as the outcome verdicts:** thin (projected
+  sales < `MODEL.thinSales`) and early (`day < FC_DAYFLOOR`, 6) are withheld; a
+  completed month (`day >= dim`) says there is nothing to project; no prior
+  complete month falls back to flat ratio-hold with a visible warning that it
+  under-reads back-loaded chargebacks.
+- **Classes:** `already` (over now), `forming` (clean now, even the low end of
+  the band clears the ceiling — the confident call), `watch` (midpoint over,
+  band not clear — the early call), `thin`, `ok`, `nosale`. The ceiling is
+  `MODEL.f5Cbp` (2), so it tracks the model.
+- **Validated in-browser** on a two-month synthetic library (prior full month
+  for the curve + partial current month): every class fires correctly, the
+  curve is learned from the right month, and the tab renders with no console
+  error. A standalone prototype + its two controls (a negative control on the
+  `fx` global-scale series showing no invented breaches, and a positive control
+  on injected accelerators) lives in the scratchpad, not the repo. **Not yet
+  covered by `verify.sh`** — a `test_forecast.js` is the obvious next addition.
+- **Not yet validated on the real book.** The synthetic controls prove the
+  mechanism; real recall/precision need the real daily series run through the
+  same harness. Real chargebacks are lumpier than the smooth curve, so expect
+  lower numbers. Do not present the projections as validated until then.
+
 ## The Trends page
 
 Rewritten 2026.09.07 to the user's spec.
