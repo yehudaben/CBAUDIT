@@ -705,6 +705,44 @@ table.mt th.grpstart,table.mt td.grpstart{border-left:1px solid var(--axis)}
 .cbd table.arns td.amt{text-align:right}
 .cbd .cbnote{color:var(--muted);font-size:var(--fs-xs);padding-top:calc(6px*var(--d))}
 
+/* ---- Issuers view (Visa RDR slip-through by issuing bank) ---- */
+.isr{border:var(--bw) solid var(--grid);border-radius:var(--r-sm);overflow:hidden;
+  background:var(--surface);margin-top:calc(10px*var(--d))}
+.isr-grid{display:grid;
+  grid-template-columns:minmax(0,2.2fr) minmax(0,1.7fr) 70px 78px minmax(0,1fr) 60px minmax(0,1.7fr);
+  gap:calc(8px*var(--d));align-items:center;
+  padding:calc(7px*var(--d)) calc(10px*var(--d))}
+.isr-head{background:var(--th-bg);border-bottom:var(--bw) solid var(--grid);
+  font-size:var(--fs-xs);letter-spacing:var(--tracking-label);text-transform:uppercase;
+  color:var(--muted);font-weight:600;position:sticky;top:0;z-index:1}
+.isr-row{border-bottom:1px solid var(--grid)}
+.isr-row:last-child{border-bottom:none}
+.isr-row > summary{list-style:none;cursor:pointer}
+.isr-row > summary::-webkit-details-marker{display:none}
+.isr-row > summary:hover{background:var(--wash)}
+.isr-row.hot > summary{box-shadow:inset 3px 0 0 var(--crit)}
+.isr-grid .i-name{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.isr-grid > span{font-variant-numeric:tabular-nums}
+.isr-grid .i-n,.isr-grid .i-rdr,.isr-grid .i-amt,.isr-grid .i-mid{text-align:right}
+.isr-grid .i-rdr{font-weight:700}
+.isr-row.hot .i-rdr{color:var(--rdr-ink)}
+.isr-grid .i-rsn{color:var(--ink2);font-size:var(--fs-sm);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.binpill{display:inline-block;font-size:var(--fs-xs);font-variant-numeric:tabular-nums;
+  background:var(--page);border:1px solid var(--grid);border-radius:var(--r-sm);
+  padding:0 5px;margin:1px 3px 1px 0;font-family:var(--font-mono,ui-monospace,monospace)}
+.isr-cases{padding:2px calc(12px*var(--d)) calc(10px*var(--d));background:var(--wash)}
+table.arns.wide td.bin{font-family:var(--font-mono,ui-monospace,monospace)}
+table.arns.wide tr.rdron td{background:rgba(208,59,59,.06)}
+table.arns.wide tr.rdron td.cov{color:var(--rdr-ink);font-weight:600}
+.isr-note{color:var(--muted);font-size:var(--fs-xs);margin-top:calc(9px*var(--d));
+  line-height:1.55;max-width:70ch}
+@media (max-width:820px){
+  .isr-grid{grid-template-columns:minmax(0,1.6fr) 60px 66px minmax(0,1fr);}
+  .isr-grid .i-bins,.isr-grid .i-mid,.isr-grid .i-rsn{display:none}
+  .isr-cases{overflow-x:auto}
+}
+
 @media (max-width:1000px){ .mgrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media (max-width:640px){
   .mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -984,7 +1022,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.21";
+const APP_VERSION   = "2026.09.22";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -4111,6 +4149,8 @@ function viewTabsHTML(){
     <button data-view="trends" class="${VIEW.page==="trends"?"on":""}">Trends
       <span class="c">${nRep} report${nRep===1?"":"s"}</span></button>
     <button data-view="forecast" class="${VIEW.page==="forecast"?"on":""}">Forecast</button>
+    <button data-view="issuers" class="${VIEW.page==="issuers"?"on":""}">Issuers${
+      DETAIL.has()?` <span class="c">${DETAIL.meta.mids} MIDs</span>`:""}</button>
     <button data-view="tracker" class="${VIEW.page==="tracker"?"on":""}">Tracker
       ${(function(){const c=TRACKER.counts(), open=c.required+c.doing;
          return open?`<span class="c">${open} open</span>`:"";})()}</button>
@@ -4120,6 +4160,7 @@ function viewTabsHTML(){
       ? (SNAP_A && SNAP_A.stamp ? "Showing "+esc((niceStamp(SNAP_A.stamp)||{}).full||SNAP_A.stamp) : "")
       : VIEW.page==="trends" ? "Across every report in the library"
       : VIEW.page==="forecast" ? "Projected month-end, from the run-rate so far"
+      : VIEW.page==="issuers" ? "Visa chargebacks RDR did not deflect, by issuing bank"
       : VIEW.page==="tracker" ? (FOLDER.state==="connected"
           ? "Shared through "+esc(FOLDER.name)+"/"+FOLDER.TRACK_DIR+"/"
           : "This browser only — connect a folder to share with your team")
@@ -4777,7 +4818,8 @@ const DETAIL_COLS = {
   "report date":"rdate", "trans. date":"tdate", "trans date":"tdate",
   "transaction date":"tdate",
   "case amount":"amt", "merchant amount":"mamt",
-  "reason":"reason", "reason code":"reason", "status":"status"
+  "reason":"reason", "reason code":"reason", "status":"status",
+  "card #":"card", "card":"card", "card number":"card"
 };
 /* a file is detail, not a report, when it carries these together */
 const DETAIL_SIGNATURE = ["case","reason","arn"];
@@ -4808,12 +4850,18 @@ function parseDetailRows(text){
     /* MIDs are strings with leading zeros; strip an Excel ="..." wrapper if present */
     const mid=String(r[idx.id]==null?"":r[idx.id]).trim().replace(/^="?|"?$/g,"").trim();
     if(!mid) continue;
+    /* BIN = the issuing bank's identifier, the first 6 digits of the card.
+       The portal masks the middle, so digits-only of "412345*********6789"
+       is "4123456789" and the first 6, "412345", are the BIN. */
+    const card = String(idx.card!==undefined ? (r[idx.card]||"") : "").trim();
+    const bin  = card.replace(/\D/g,"").slice(0,6);
     rows.push({
       id:mid,
       cse:String(r[idx.case]||"").trim(),
       scheme:String(r[idx.scheme]||"").trim().toLowerCase(),
       brand:String(r[idx.brand]||"").trim(),
       bank:String(r[idx.bank]||"").trim(),
+      bin:bin,
       arn:String(r[idx.arn]||"").trim(),
       rdate:String(r[idx.rdate]||"").trim(),
       tdate:String(r[idx.tdate]||"").trim(),
@@ -5180,6 +5228,131 @@ function forecastPageHTML(){
   </div>`;
 }
 
+/* ============================================================
+   ISSUERS — Visa chargebacks RDR did not deflect, by issuing bank.
+
+   Every Visa row in the detail is a chargeback RDR did NOT stop: had RDR
+   resolved the dispute it would be a refund, never a chargeback. So the Visa
+   detail IS the slip-through set. This groups it by issuing bank and by BIN
+   (first 6 of the card — the unit you can actually block), and marks the cases
+   that landed on merchants where RDR is currently active: the ones where RDR
+   was on and still missed. The point is to spot issuers whose disputes keep
+   becoming chargebacks — to escalate to RDR/Ethoca or block a BIN.
+
+   Honest caveat: the case list spans months; "RDR-active" is read from the
+   merchant's CURRENT month-to-date figures, a present-status proxy, not the RDR
+   state on each case's day. Nothing here is scored.
+   ============================================================ */
+function issuerData(){
+  if(!DETAIL.has()) return {ok:false, reason:"no-detail"};
+  const byMid = (window.__A && window.__A.byMid) || {};
+  const visa = DETAIL.rows.filter(r=>r.scheme==="visa");
+  if(!visa.length) return {ok:false, reason:"no-visa"};
+  const topKey = o => { let k="",m=-1; for(const x in o){ if(o[x]>m){ m=o[x]; k=x; } } return k; };
+  const by = {};
+  visa.forEach(r=>{
+    const key = r.bank || "(issuer not named)";
+    const g = by[key] || (by[key]={bank:key, n:0, amt:0, bins:{}, products:{},
+      mids:{}, reasons:{}, atRdrOn:0, atRdrOnAmt:0, cases:[]});
+    g.n++; g.amt += r.amt||0;
+    if(r.bin) g.bins[r.bin]=(g.bins[r.bin]||0)+1;
+    if(r.brand) g.products[r.brand]=(g.products[r.brand]||0)+1;
+    g.mids[r.id]=1;
+    if(r.reason) g.reasons[r.reason]=(g.reasons[r.reason]||0)+1;
+    const e = byMid[r.id];
+    const rdrOn = !!(e && e.rn>0);
+    if(rdrOn){ g.atRdrOn++; g.atRdrOnAmt += r.amt||0; }
+    g.cases.push({mid:r.id, merch:(e&&e.m)||"", bin:r.bin, arn:r.arn, amt:r.amt||0,
+      reason:r.reason, tdate:r.tdate, cov:(e&&e.cov!=null?e.cov:null), rdrOn});
+  });
+  const issuers = Object.keys(by).map(k=>{
+    const g=by[k];
+    g.nMids = Object.keys(g.mids).length;
+    g.binList = Object.keys(g.bins).sort((a,b)=>g.bins[b]-g.bins[a]);
+    g.topReason = topKey(g.reasons);
+    g.topProduct = topKey(g.products);
+    g.cases.sort((a,b)=> (b.rdrOn-a.rdrOn) || (b.amt-a.amt));
+    return g;
+  }).sort((a,b)=> b.atRdrOn-a.atRdrOn || b.n-a.n || b.amt-a.amt);
+  return {ok:true, issuers,
+    totCB:visa.length, totAmt:visa.reduce((s,r)=>s+(r.amt||0),0),
+    nIssuers:issuers.length,
+    atRdrOnTotal:issuers.reduce((s,g)=>s+g.atRdrOn,0),
+    atRdrOnAmt:issuers.reduce((s,g)=>s+g.atRdrOnAmt,0),
+    noBin:visa.filter(r=>!r.bin).length};
+}
+
+function issuerPageHTML(){
+  const D = issuerData();
+  if(!D.ok){
+    const why = D.reason==="no-visa"
+      ? "The loaded detail has no Visa chargebacks to analyse."
+      : "No chargeback detail is loaded. Pull it from the portal (Copy flagged MIDs → the detail bookmarklet) and paste it in, then this view fills.";
+    return `<div class="page"><div class="empty">${why}</div></div>`;
+  }
+  const chip=(t,cls)=>`<span class="chip${cls?" "+cls:""}">${t}</span>`;
+  const covTxt = c => c==null ? "—" : Number(c).toFixed(0)+"%";
+  const row = g => {
+    const bins = g.binList.slice(0,4).map(b=>`<span class="binpill">${esc(b)}</span>`).join("")
+      + (g.binList.length>4?` <span class="muted">+${g.binList.length-4}</span>`:"");
+    const cases = g.cases.map(c=>`<tr class="${c.rdrOn?"rdron":""}">
+      <td>${esc(c.merch||c.mid)}</td>
+      <td class="bin">${esc(c.bin||"—")}</td>
+      <td class="arn">${esc(c.arn||"—")}</td>
+      <td>${esc(c.reason||"—")}</td>
+      <td class="amt">${fmtM(c.amt,2)}</td>
+      <td class="cov">${c.rdrOn?`RDR on · cov ${covTxt(c.cov)}`:`<span class="muted">RDR off</span>`}</td>
+      <td class="tdt">${esc(c.tdate||"")}</td></tr>`).join("");
+    return `<details class="isr-row${g.atRdrOn?" hot":""}">
+      <summary class="isr-grid">
+        <span class="i-name">${esc(g.bank)}</span>
+        <span class="i-bins">${bins||'<span class="muted">no BIN</span>'}</span>
+        <span class="i-n">${g.n}</span>
+        <span class="i-rdr">${g.atRdrOn||"—"}</span>
+        <span class="i-amt">${fmtM(g.amt,0)}</span>
+        <span class="i-mid">${g.nMids}</span>
+        <span class="i-rsn">${esc(g.topReason||"—")}</span>
+      </summary>
+      <div class="isr-cases">
+        <table class="arns wide">
+          <thead><tr><th>Merchant</th><th>BIN</th><th>ARN</th><th>Reason</th>
+            <th class="amt">Amount</th><th>Merchant RDR</th><th>Trans. date</th></tr></thead>
+          <tbody>${cases}</tbody>
+        </table>
+      </div>
+    </details>`;
+  };
+  return `<div class="page">
+    <div class="tiles">
+      <div class="tile"><div class="lab">Visa slip-throughs</div>
+        <div class="val">${fmtN(D.totCB)}</div><div class="sub">chargebacks RDR did not deflect</div></div>
+      <div class="tile"><div class="lab">$ exposure</div>
+        <div class="val">${fmtM(D.totAmt,0)}</div><div class="sub">total case amount</div></div>
+      <div class="tile c"><div class="lab">At RDR-on merchants</div>
+        <div class="val">${fmtN(D.atRdrOnTotal)}</div><div class="sub">RDR active and still missed — ${fmtM(D.atRdrOnAmt,0)}</div></div>
+      <div class="tile"><div class="lab">Issuing banks</div>
+        <div class="val">${fmtN(D.nIssuers)}</div><div class="sub">distinct issuers${D.noBin?` · ${D.noBin} case${D.noBin===1?"":"s"} no BIN`:""}</div></div>
+    </div>
+    <div class="isr">
+      <div class="isr-grid isr-head">
+        <span class="i-name">Issuing bank</span><span class="i-bins">BIN(s)</span>
+        <span class="i-n">Visa CBs</span><span class="i-rdr">at RDR-on</span>
+        <span class="i-amt">$ exposure</span><span class="i-mid">Merch.</span>
+        <span class="i-rsn">Top reason</span>
+      </div>
+      ${D.issuers.map(row).join("")}
+    </div>
+    <div class="isr-note">
+      Ranked by cases at RDR-on merchants, then volume. Every case here already
+      became a chargeback despite RDR — the issuers at the top are where RDR (or
+      Ethoca) is not deflecting. <b>BIN</b> is the blockable unit (first 6 of the
+      card); a whole-issuer pattern across several BINs is the stronger signal.
+      “RDR-on” reads the merchant’s current month-to-date RDR activity, a proxy —
+      the case list spans months. None of this is a scored figure.
+    </div>
+  </div>`;
+}
+
 function render(){
   clearErr();
   if(!SNAP_A){ $("#out").innerHTML='<div class="empty">Load today\'s report to generate the audit.</div>'; return; }
@@ -5202,6 +5375,11 @@ function render(){
   }
   if(VIEW.page==="forecast"){
     add(forecastPageHTML());
+    finishRender(P, A, V);
+    return;
+  }
+  if(VIEW.page==="issuers"){
+    add(issuerPageHTML());
     finishRender(P, A, V);
     return;
   }
@@ -6119,6 +6297,7 @@ window.__paste = (csv,name)=> ingestText(csv, name||"paste-test.csv");
 window.__loadDetail = (text,name)=>{ const r=DETAIL.add(text, name||"details-test.csv"); render(); return r; };
 window.__detail = mid => DETAIL.get(mid);
 window.__detailMeta = ()=> DETAIL.meta;
+window.__issuers = ()=> issuerData();
 window.__detailClear = ()=>{ DETAIL.clear(); render(); return DETAIL.meta; };
 window.__looksLikeDetail = t => looksLikeDetail(t);
 window.__openPaste = ()=>{ openPasteBox(); return !!document.getElementById("pastewrap"); };

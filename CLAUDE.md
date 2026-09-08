@@ -680,6 +680,31 @@ hooks `__loadDetail`, `__detail`, `__detailMeta`, `__detailClear`,
   input to the pull. Integrity/quarantine MIDs are excluded to match that scope;
   widen `flaggedMids()` if that changes.
 
+### The Issuers view (Visa RDR slip-through by bank)
+
+Added 2026.09.22. `VIEW.page==="issuers"`, `issuerData()` + `issuerPageHTML()`,
+nav tab between Forecast and Tracker, test hook `__issuers`. The question it
+answers: which **issuing banks / BINs** keep producing Visa chargebacks that RDR
+did not deflect, so they can be escalated to RDR/Ethoca or blocked.
+
+- **Every Visa row in the detail is a slip-through by definition** — had RDR
+  resolved the dispute it would be a refund, never a chargeback. So the view is
+  just `DETAIL.rows` filtered to `scheme==="visa"`, grouped by issuing `bank`.
+- **BIN is the blockable unit.** `parseDetailRows` now captures `bin` = the
+  first 6 digits of the (masked) Card # — the issuer identifier. Detail pulled
+  before 2026.09.22 has no `bin`; it must be re-pasted once (the CSV always
+  carried the Card # column, so a re-paste fills BINs in).
+- **The sharp signal is `atRdrOn`** — cases whose merchant has RDR currently
+  active (`__A.byMid[mid].rn>0`): RDR was on and still missed. Issuers sort by
+  `atRdrOn`, then volume, then $. This joins detail (per-case) to the summary
+  (per-MID RDR status) — the one place the two datasets combine.
+- **Honest caveat, on screen and in code:** the case list spans months while RDR
+  status is current month-to-date, so `atRdrOn` is a present-status proxy, not
+  the RDR state on each case's day. Nothing here is scored — `issuerData` never
+  touches `MODEL` or `analyse`.
+- Rows are `<details>` on a shared CSS grid (`.isr-grid`) so columns align like a
+  table yet expand to the per-case ARN list without JS wiring.
+
 ### The detail pull (bookmarklet)
 
 `tools/bookmarklet-details.js` (source) and `.url.txt` (the `javascript:`

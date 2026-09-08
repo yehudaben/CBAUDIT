@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.21",
+  "version": "2026.09.22",
   "model": "m1.0",
-  "notes": "Chargeback detail \u2014 join the portal per-case detail (reason, $, brand, issuer, ARN) to flagged audit cards, plus the detail-pull bookmarklet."
+  "notes": "Issuers view \u2014 Visa chargebacks RDR did not deflect, grouped by issuing bank and BIN, with the at-RDR-on signal."
 }
