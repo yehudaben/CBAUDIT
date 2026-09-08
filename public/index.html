@@ -663,6 +663,48 @@ table.mt th.grpstart,table.mt td.grpstart{border-left:1px solid var(--axis)}
 .acard .act .ar{color:var(--muted);margin-right:6px;font-weight:700}
 .acard .act.warnrow{color:var(--crit);font-weight:600}
 
+/* ---- chargeback detail panel (the per-case list behind a MID) ---- */
+.cbd{margin-top:calc(8px*var(--d));border:var(--bw) solid var(--grid);
+  border-radius:var(--r-sm);background:var(--wash)}
+.cbd > summary{list-style:none;cursor:pointer;padding:calc(5px*var(--d)) calc(9px*var(--d));
+  font-size:var(--fs-sm);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.cbd > summary::-webkit-details-marker{display:none}
+.cbd > summary::before{content:"\25B8";color:var(--muted);font-size:var(--fs-xs);
+  margin-right:2px;transition:transform .12s}
+.cbd[open] > summary::before{transform:rotate(90deg)}
+.cbd summary .cbl{font-size:var(--fs-xs);letter-spacing:var(--tracking-label);
+  text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbd summary .cbn{font-weight:700;font-variant-numeric:tabular-nums}
+.cbd summary .cbx{color:var(--ink2);font-variant-numeric:tabular-nums}
+.cbd summary .cbsp{flex:1}
+.cbd summary .cbdt{color:var(--muted);font-size:var(--fs-xs)}
+.cbd .cbbody{padding:0 calc(9px*var(--d)) calc(8px*var(--d));
+  border-top:1px solid var(--grid)}
+.cbd .cbrow{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;
+  padding-top:calc(7px*var(--d))}
+.cbd .cbrl{font-size:var(--fs-xs);letter-spacing:var(--tracking-label);
+  text-transform:uppercase;color:var(--muted);font-weight:600;
+  min-width:74px;flex:0 0 74px}
+.cbd .chip{font-size:var(--fs-xs);font-variant-numeric:tabular-nums;
+  background:var(--surface);border:1px solid var(--grid);border-radius:var(--r-pill);
+  padding:1px 8px;white-space:nowrap}
+.cbd .chip b{font-weight:700}
+.cbd .chip.fraud{color:var(--gen-ink);border-color:var(--serious)}
+.cbd .chip.visa{color:var(--rdr-ink);border-color:var(--crit)}
+.cbd .chip.mc{color:var(--mc-ink);border-color:var(--accent)}
+.cbd .arnlist{margin-top:calc(6px*var(--d));width:100%}
+.cbd table.arns{width:100%;border-collapse:collapse;font-size:var(--fs-xs);
+  font-variant-numeric:tabular-nums}
+.cbd table.arns th{text-align:left;color:var(--muted);font-weight:600;
+  letter-spacing:var(--tracking-label);text-transform:uppercase;
+  padding:3px 8px 3px 0;border-bottom:1px solid var(--grid)}
+.cbd table.arns td{padding:3px 8px 3px 0;border-bottom:1px solid var(--grid);
+  white-space:nowrap}
+.cbd table.arns td.arn{font-family:var(--font-mono,ui-monospace,monospace);
+  color:var(--rdr-ink)}
+.cbd table.arns td.amt{text-align:right}
+.cbd .cbnote{color:var(--muted);font-size:var(--fs-xs);padding-top:calc(6px*var(--d))}
+
 @media (max-width:1000px){ .mgrid{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media (max-width:640px){
   .mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -881,6 +923,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
   <div class="tools">
     <button class="btn p" id="btnSheets" disabled>Copy for Google Sheets</button>
     <button class="btn" id="btnCsv" disabled>Download CSV</button>
+    <button class="btn" id="btnMids" disabled title="Copy the flagged MIDs, to pull their chargeback detail on the portal">Copy flagged MIDs</button>
     <button class="btn" id="btnPrint" disabled>Print / PDF</button>
     <button class="btn" id="btnTheme" title="Light / dark">&#9686;</button>
   </div>
@@ -941,7 +984,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.20";
+const APP_VERSION   = "2026.09.21";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -1682,7 +1725,7 @@ function syncActive(){
   SNAP_A = snapToSnapshot(snapById(ACTIVE));
   SNAP_B = null;
   const on = !!SNAP_A;
-  ["#btnSheets","#btnCsv","#btnPrint"].forEach(s=>{const b=$(s); if(b) b.disabled=!on;});
+  ["#btnSheets","#btnCsv","#btnMids","#btnPrint"].forEach(s=>{const b=$(s); if(b) b.disabled=!on;});
 }
 
 function niceStamp(s){
@@ -2104,12 +2147,13 @@ const FOLDER = {
      source folder. */
   async scan(){
     if(this.state!=="connected") return [];
-    const out=[], skipped=[];
+    const out=[], skipped=[], detailFiles=[];
     let raw=[];
     try{ raw = await this.io.listCsv(); }
     catch(e){ this.found=0; this.skipped=[String(e.message||e)]; return []; }
     raw.forEach(f=>{
       try{
+        if(looksLikeDetail(f.text)){ detailFiles.push(f); return; }
         const snap = loadSnapshot(f.text, f.name);
         if(snap.dateOnly && f.lastModified){
           const d=new Date(f.lastModified), p=n=>String(n).padStart(2,"0");
@@ -2127,6 +2171,14 @@ const FOLDER = {
         skipped.push(f.name+": "+(e.message||e));
       }
     });
+    /* the folder is authoritative for folder-sourced detail: rebuild from
+       exactly the detail files present, so a removed file drops out. Detail
+       loaded by paste (no folder file) is left untouched when none are here. */
+    if(detailFiles.length){
+      DETAIL.reset();
+      detailFiles.forEach(f=>{ try{ DETAIL.add(f.text, f.name); }
+        catch(e){ skipped.push(f.name+": "+(e.message||e)); } });
+    }
     this.found=out.length; this.skipped=skipped;
     return out;
   },
@@ -4699,6 +4751,173 @@ function trackBtn(e){
     aria-pressed="${on?"true":"false"}">${on?"✓":"+"}</button>`;
 }
 /* ============================================================
+   CHARGEBACK DETAIL — the per-case list behind each MID.
+
+   The report is one row per MID (counts). Behind it, at
+   portal.paymenthelp.ai/search/?mid=<MID>, sits one row per individual
+   chargeback: reason code, dollar amount, card brand, issuing bank and the
+   ARN. There is no bulk export, so a combined details CSV — one file, every
+   flagged MID, a MID column added per row — is produced on the portal (the
+   bookmarklet, later the weekly agent) and dropped in like any report. This
+   joins it to the audit card by MID.
+
+   Two invariants, both hard-rule-1:
+   - It NEVER feeds scoring. Nothing here can move a flag, weight or tier.
+   - The case count is NOT the month-to-date CB #. The list spans months and
+     is scoped by the portal, not by the reset, so it is shown as its own
+     figures (cases, exposure, reason mix) and never merged into the count.
+   ============================================================ */
+const DETAIL_LS = "cbrc.details.v1";
+const DETAIL_COLS = {
+  "mid":"id",
+  "case #":"case", "case#":"case", "case no":"case", "case":"case",
+  "scheme":"scheme", "brand":"brand",
+  "bank":"bank", "issuer":"bank", "country":"country",
+  "arn":"arn",
+  "report date":"rdate", "trans. date":"tdate", "trans date":"tdate",
+  "transaction date":"tdate",
+  "case amount":"amt", "merchant amount":"mamt",
+  "reason":"reason", "reason code":"reason", "status":"status"
+};
+/* a file is detail, not a report, when it carries these together */
+const DETAIL_SIGNATURE = ["case","reason","arn"];
+/* reason strings the portal uses that mean "issuer/cardholder alleges fraud" */
+const FRAUD_REASONS = /fraud|no cardholder|unauthor/i;
+
+function looksLikeDetail(text){
+  try{
+    const raw = parseCSV(text); if(!raw.length) return false;
+    const head = raw[0].map(h=>String(h).trim().toLowerCase());
+    const keys = head.map(h=>DETAIL_COLS[h]).filter(Boolean);
+    return keys.indexOf("id")>=0 && DETAIL_SIGNATURE.every(k=>keys.indexOf(k)>=0);
+  }catch(e){ return false; }
+}
+function parseDetailRows(text){
+  const raw = parseCSV(text);
+  if(!raw.length) throw new Error("That file appears to be empty.");
+  const head = raw[0].map(h=>String(h).trim().toLowerCase());
+  const idx={}; head.forEach((h,i)=>{ const k=DETAIL_COLS[h]; if(k && idx[k]===undefined) idx[k]=i; });
+  if(idx.id===undefined)
+    throw new Error("This details file needs a MID column — the bookmarklet adds one per case.");
+  const miss = DETAIL_SIGNATURE.filter(k=>idx[k]===undefined);
+  if(miss.length)
+    throw new Error("Not a chargeback-detail export — missing column(s): "+miss.join(", ")+".");
+  const rows=[];
+  for(let i=1;i<raw.length;i++){
+    const r=raw[i];
+    /* MIDs are strings with leading zeros; strip an Excel ="..." wrapper if present */
+    const mid=String(r[idx.id]==null?"":r[idx.id]).trim().replace(/^="?|"?$/g,"").trim();
+    if(!mid) continue;
+    rows.push({
+      id:mid,
+      cse:String(r[idx.case]||"").trim(),
+      scheme:String(r[idx.scheme]||"").trim().toLowerCase(),
+      brand:String(r[idx.brand]||"").trim(),
+      bank:String(r[idx.bank]||"").trim(),
+      arn:String(r[idx.arn]||"").trim(),
+      rdate:String(r[idx.rdate]||"").trim(),
+      tdate:String(r[idx.tdate]||"").trim(),
+      amt:num(r[idx.amt]),
+      reason:String(r[idx.reason]||"").trim(),
+      status:String(r[idx.status]||"").trim()
+    });
+  }
+  return rows;
+}
+function summariseDetail(rows){
+  const by={};
+  const bump=(o,k)=>{ if(k) o[k]=(o[k]||0)+1; };
+  rows.forEach(r=>{
+    const g = by[r.id] || (by[r.id]={id:r.id, cases:[], amt:0, fraudAmt:0,
+      reasons:{}, schemes:{}, banks:{}, statuses:{}, arns:[], tmin:null, tmax:null});
+    g.cases.push(r);
+    g.amt += r.amt||0;
+    if(FRAUD_REASONS.test(r.reason)) g.fraudAmt += r.amt||0;
+    bump(g.reasons, r.reason); bump(g.schemes, r.scheme);
+    bump(g.banks, r.bank); bump(g.statuses, r.status);
+    if(r.arn) g.arns.push({arn:r.arn, scheme:r.scheme, amt:r.amt, reason:r.reason, bank:r.bank});
+    const d=r.tdate; if(d){ if(!g.tmin||d<g.tmin) g.tmin=d; if(!g.tmax||d>g.tmax) g.tmax=d; }
+  });
+  Object.keys(by).forEach(k=>{ by[k].n=by[k].cases.length; });
+  return by;
+}
+
+/* One store, keyed by MID. Accumulates rows across files (per-MID drops or one
+   combined file), re-summarises, and mirrors to localStorage so the join
+   survives a reload. Everything it holds is masked/public (masked PANs, ARNs);
+   it is same-origin only, exactly like the report library. */
+const DETAIL = {
+  rows:[], byMid:{}, meta:null,
+  reset(){ this.rows=[]; this.byMid={}; this.meta=null; },
+  add(text, name){
+    const rows = parseDetailRows(text);
+    if(!rows.length) throw new Error("No chargeback rows found under the header.");
+    this.rows = this.rows.concat(rows);
+    this.byMid = summariseDetail(this.rows);
+    this.meta = { name:name || (this.meta&&this.meta.name) || "details.csv",
+      rows:this.rows.length, mids:Object.keys(this.byMid).length, at:Date.now() };
+    this.persist();
+    return {rows:rows.length, mids:this.meta.mids};
+  },
+  get(mid){ return this.byMid[mid]||null; },
+  has(){ return !!(this.meta && this.rows.length); },
+  clear(){ this.reset(); try{ localStorage.removeItem(DETAIL_LS); }catch(e){} },
+  persist(){ try{ localStorage.setItem(DETAIL_LS,
+    JSON.stringify({rows:this.rows, meta:this.meta})); }catch(e){} },
+  restore(){ try{ const raw=localStorage.getItem(DETAIL_LS); if(!raw) return;
+    const o=JSON.parse(raw); this.rows=o.rows||[]; this.meta=o.meta||null;
+    this.byMid=summariseDetail(this.rows); }catch(e){} }
+};
+
+/* The panel under an audit card. Rendered only when detail exists for THIS MID
+   — no "0 cases" placeholder, no narration. Figures only. */
+function detailPanel(e){
+  if(!DETAIL.has()) return "";
+  const g = DETAIL.get(e.id);
+  if(!g || !g.n) return "";
+  const ent = o => Object.keys(o).map(k=>[k,o[k]]).sort((a,b)=>b[1]-a[1]);
+  const reasons = ent(g.reasons), banks = ent(g.banks).slice(0,3), statuses = ent(g.statuses);
+  const vi = g.schemes.visa||0, mc = g.schemes.mastercard||0;
+  const dates = g.tmin ? (g.tmin===g.tmax ? g.tmin : g.tmin+" → "+g.tmax) : "dates n/a";
+  const chip=(t,cls)=>`<span class="chip${cls?" "+cls:""}">${t}</span>`;
+  const reasonChips = reasons.map(([r,n])=>
+    chip(`${esc(r)} <b>${n}</b>`, FRAUD_REASONS.test(r)?"fraud":"")).join("");
+  const schemeChips = (vi?chip(`Visa <b>${vi}</b>`,"visa"):"") + (mc?chip(`MC <b>${mc}</b>`,"mc"):"");
+  const bankChips = banks.map(([b,n])=>chip(`${esc(b)} <b>${n}</b>`)).join("");
+  const statusChips = statuses.map(([s,n])=>chip(`${esc(s)} <b>${n}</b>`)).join("");
+
+  /* Visa ARNs are the ones RDR work needs — surfaced first, then any others */
+  const arns = g.arns.slice().sort((a,b)=> (a.scheme==="visa"?-1:1)-(b.scheme==="visa"?-1:1));
+  const arnRows = arns.map(a=>`<tr>
+    <td class="arn">${esc(a.arn)}</td>
+    <td>${esc(a.scheme==="visa"?"Visa":a.scheme==="mastercard"?"MC":a.scheme)}</td>
+    <td>${esc(a.reason)}</td>
+    <td class="amt">${fmtM(a.amt,2)}</td></tr>`).join("");
+
+  return `<details class="cbd">
+    <summary>
+      <span class="cbl">Chargeback detail</span>
+      <span class="cbn">${g.n}</span><span class="cbx">case${g.n===1?"":"s"}</span>
+      <span class="cbx">· ${fmtM(g.amt,0)}</span>
+      ${schemeChips}
+      <span class="cbsp"></span>
+      <span class="cbdt">${esc(dates)}</span>
+    </summary>
+    <div class="cbbody">
+      <div class="cbrow"><span class="cbrl">Reason</span>${reasonChips}</div>
+      <div class="cbrow"><span class="cbrl">Issuer</span>${bankChips||chip("n/a")}</div>
+      <div class="cbrow"><span class="cbrl">Status</span>${statusChips||chip("n/a")}</div>
+      <div class="arnlist">
+        <table class="arns">
+          <thead><tr><th>ARN</th><th>Brand</th><th>Reason</th><th class="amt">Amount</th></tr></thead>
+          <tbody>${arnRows}</tbody>
+        </table>
+      </div>
+      <div class="cbnote">Case list from the portal detail export, ${esc((DETAIL.meta&&DETAIL.meta.name)||"details.csv")}. Spans months — not the month-to-date CB #. Never scored.</div>
+    </div>
+  </details>`;
+}
+/* ============================================================
    THE AUDIT CARD — one format for every tier.
 
    Twelve figures in four labelled groups, always in the same places, so the
@@ -4765,6 +4984,7 @@ function auditCard(e){
     </div>
     <div class="act"><span class="ar">&rarr;</span>${esc(actionFor(e))}</div>
     ${e.bad?`<div class="act warnrow"><span class="ar">&#9888;</span>CB % above 100% — verify before acting.</div>`:""}
+    ${detailPanel(e)}
   </div>`;
 }
 
@@ -5593,6 +5813,30 @@ async function copyTSV(which){
     showErr("Could not reach the clipboard from this context. Use Download CSV instead.");
   }
 }
+/* The flagged MIDs, one per line — the input to the portal detail bookmarklet.
+   "Flagged" here is the action set (act today + high + monitor), the ~52, to
+   match the scope chosen for the detail pull. MIDs are copied as plain strings
+   with leading zeros intact — never Excel-wrapped, because they are pasted into
+   a prompt, not a spreadsheet. */
+function flaggedMids(){
+  const A = window.__A;
+  if(!A) return [];
+  return [].concat(A.crit||[], A.high||[], A.mon||[]).map(e=>e.id);
+}
+async function copyFlaggedMids(){
+  const ids = flaggedMids();
+  if(!ids.length){ toast("No flagged MIDs in this report."); return; }
+  const text = ids.join("\n");
+  const done = ()=> toast(ids.length+" flagged MID"+(ids.length===1?"":"s")
+    +" copied. On the portal, run the detail bookmarklet and paste.");
+  try{ await navigator.clipboard.writeText(text); done(); return; }catch(e){}
+  try{
+    const ta=document.createElement("textarea"); ta.value=text;
+    ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove(); done();
+  }catch(e2){ showErr("Could not reach the clipboard. The MIDs are: "+ids.join(", ")); }
+}
+window.__flaggedMids = flaggedMids;
 function downloadCSV(){
   const set=exportSet("all");
   const blob=new Blob(["﻿"+toCSV(set)],{type:"text/csv;charset=utf-8"});
@@ -5677,15 +5921,21 @@ function wireDynamic(){
 function ingestFiles(files){
   const list=[...files].filter(f=>/\.csv$/i.test(f.name)||f.type==="text/csv");
   if(!list.length){ showErr("Those files are not CSV exports."); return; }
-  let done=0, added=0, replaced=0, failed=[], newIds=[];
+  let done=0, added=0, replaced=0, failed=[], newIds=[], detailCases=0, detailMids=0;
   list.forEach(file=>{
     const rd=new FileReader();
     rd.onload=()=>{
       try{
-        const snap=loadSnapshot(String(rd.result), file.name);
-        const r=addSnapshot(snap);
-        newIds.push(r.id);
-        if(r.replaced) replaced++; else added++;
+        const text=String(rd.result);
+        if(looksLikeDetail(text)){
+          const r=DETAIL.add(text, file.name);
+          detailCases+=r.rows; detailMids=r.mids;
+        } else {
+          const snap=loadSnapshot(text, file.name);
+          const r=addSnapshot(snap);
+          newIds.push(r.id);
+          if(r.replaced) replaced++; else added++;
+        }
       }catch(err){
         failed.push(file.name+": "+(err.isAudit
           ? "that is an audit this tool produced, not a portal export"
@@ -5708,6 +5958,8 @@ function ingestFiles(files){
     const bits=[];
     if(added) bits.push(added+" report"+(added===1?"":"s")+" added");
     if(replaced) bits.push(replaced+" refreshed");
+    if(detailCases) bits.push(detailCases+" chargeback case"+(detailCases===1?"":"s")
+      +" across "+detailMids+" MID"+(detailMids===1?"":"s"));
     if(bits.length) toast(bits.join(", ")+".");
   }
 }
@@ -5720,6 +5972,18 @@ function ingestFiles(files){
 function ingestText(csv, name){
   name = name || "pasted-report.csv";
   if(!csv || !String(csv).trim()){ showErr("Nothing to load — the paste was empty."); return {ok:false}; }
+  if(looksLikeDetail(String(csv))){
+    try{
+      const r = DETAIL.add(String(csv), name);
+      renderDataStrip(); render(); clearErr();
+      toast("Chargeback detail loaded — "+r.rows+" case"+(r.rows===1?"":"s")
+        +" across "+r.mids+" MID"+(r.mids===1?"":"s")+".");
+      return {ok:true, detail:true, rows:r.rows, mids:r.mids};
+    }catch(err){
+      showErr("Could not load the chargeback detail: "+((err&&err.message)||err));
+      return {ok:false, msg:(err&&err.message)||String(err)};
+    }
+  }
   try{
     const snap = loadSnapshot(String(csv), name);
     const r = addSnapshot(snap);
@@ -5803,6 +6067,7 @@ window.addEventListener("paste",e=>{
 
 $("#btnSheets").onclick=()=>copyTSV("all");
 $("#btnCsv").onclick=downloadCSV;
+$("#btnMids").onclick=copyFlaggedMids;
 $("#btnPrint").onclick=()=>window.print();
 $("#btnTheme").onclick=()=>{
   const r=document.documentElement;
@@ -5828,6 +6093,7 @@ applyTheme();
 
 /* ---- boot ---- */
 libLoad();
+DETAIL.restore();
 TRACKER.loadLocal();
 syncActive();
 render();
@@ -5850,6 +6116,11 @@ if(DRIVE_IO.available()) DRIVE_IO.loadGis().catch(()=>{});
 
 /* expose for automated checks */
 window.__paste = (csv,name)=> ingestText(csv, name||"paste-test.csv");
+window.__loadDetail = (text,name)=>{ const r=DETAIL.add(text, name||"details-test.csv"); render(); return r; };
+window.__detail = mid => DETAIL.get(mid);
+window.__detailMeta = ()=> DETAIL.meta;
+window.__detailClear = ()=>{ DETAIL.clear(); render(); return DETAIL.meta; };
+window.__looksLikeDetail = t => looksLikeDetail(t);
 window.__openPaste = ()=>{ openPasteBox(); return !!document.getElementById("pastewrap"); };
 window.__loadForTest = (text,name)=>{
   const snap=loadSnapshot(text,name);

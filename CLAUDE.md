@@ -642,6 +642,68 @@ the "get ahead of it" view. `VIEW.page==="forecast"`, `forecastData()` +
   same harness. Real chargebacks are lumpier than the smooth curve, so expect
   lower numbers. Do not present the projections as validated until then.
 
+## Chargeback detail
+
+Added 2026.09.21. The report is one row per MID (counts); behind it, at
+`portal.paymenthelp.ai/search/?mid=<MID>`, sits one row per individual
+chargeback — reason code, dollar amount, card brand, issuing bank, and the ARN.
+This joins that detail to the audit card by MID. `DETAIL` (a store), `parseCSV`
+→ `parseDetailRows` → `summariseDetail`, and `detailPanel(e)` on the card. Test
+hooks `__loadDetail`, `__detail`, `__detailMeta`, `__detailClear`,
+`__looksLikeDetail`, `__flaggedMids`.
+
+- **It never feeds scoring and never equals the CB #.** Two hard invariants.
+  Nothing in `DETAIL` can move a flag, weight or tier — `analyse()` does not see
+  it. And the case list spans months (portal-scoped, not reset-scoped), so it is
+  shown as its own figures (cases, exposure, reason mix, ARNs) and is never
+  merged into the month-to-date count. The panel note says so on screen.
+- **The join is by MID string**, leading zeros intact; `parseDetailRows` strips
+  an Excel `="…"` wrapper if one is present. Same MID-as-string discipline as
+  the tracker.
+- **A file is detail, not a report, by signature** — `looksLikeDetail()` needs
+  `case`, `reason`, `arn` and a `mid` column together. Routed ahead of
+  `loadSnapshot` in `ingestText`, `ingestFiles` and `FOLDER.scan()`, so a detail
+  CSV in the same folder or paste box lands in `DETAIL`, not as a phantom report.
+  The report signature guard (`tier/flags/primary/action`) still rejects our own
+  audit output; the two signatures do not overlap.
+- **`FOLDER.scan()` is authoritative for folder-sourced detail** — it resets
+  `DETAIL` and rebuilds from exactly the detail files present, so a removed file
+  drops out. Paste-loaded detail is left untouched when the folder has none.
+  Mirrored to `localStorage` (`cbrc.details.v1`) so the join survives a reload;
+  everything stored is masked/public (masked PANs, ARNs), same-origin only.
+- **The panel renders only where detail exists for that MID** — no "0 cases"
+  placeholder, no narration. Reason chips, top-3 issuers, status, and an ARN
+  table with **Visa ARNs first** because that is what RDR work consumes. Fraud
+  reasons (`FRAUD_REASONS`) get a tinted chip.
+- **Scope is the flagged action set.** "Copy flagged MIDs" (`copyFlaggedMids`,
+  `#btnMids`) copies crit+high+mon (~52) as newline-separated strings — the
+  input to the pull. Integrity/quarantine MIDs are excluded to match that scope;
+  widen `flaggedMids()` if that changes.
+
+### The detail pull (bookmarklet)
+
+`tools/bookmarklet-details.js` (source) and `.url.txt` (the `javascript:`
+bookmarklet). Runs **on the portal**, same-origin, riding the operator's login —
+the only place a cross-origin static host cannot reach. There is no bulk export,
+so it loops `/search/?mid=<MID>` for each MID (pasted from the console, or every
+MID in the grid if blank), parses the 17-column detail table out of the HTML,
+and stitches one CSV with a **MID column prepended** — exactly what the console
+join expects. Copy-to-clipboard (→ Paste report) or Download `details.csv` (→
+drop in the folder).
+
+- **Verified against the live portal 2026.09.21**: the fetch+parse core pulled
+  one flagged merchant's 8 cases with all 17 columns correct and the
+  MID/Merchant info row correctly skipped (it has 8 `td`, not 17); the grid
+  fallback found 801 MIDs.
+- The table is found by the header carrying **ARN + Case #**; a data row is
+  exactly 17 `td` with a numeric Case #. If the portal markup changes, that is
+  the selector to adjust.
+- Later this is the weekly agent's job (AGENT_SPEC) — same endpoint, same output
+  shape; the bookmarklet is the works-today runner, not a throwaway.
+- **Not yet covered by `verify.sh`** — `test_detail.js` (looksLikeDetail routing,
+  the summarise math, panel-renders-only-where-present) is the obvious addition,
+  alongside the pending `test_forecast.js`.
+
 ## The Trends page
 
 Rewritten 2026.09.07 to the user's spec.
@@ -709,9 +771,14 @@ defences.
   what they *should* mean.
 - **`Avg Sales`** is verified redundant (`$ Sales ÷ # Sales`) and ignored.
 - Hosting under `portal.paymenthelp.ai` would make the tool same-origin with
-  the report grid and let it fetch `details.jsp` directly, dropping the CSV
-  download entirely. No third-party host can do this — browsers block
-  cross-origin authenticated requests. Worth chasing if access is possible.
+  the report grid and let it fetch detail directly, dropping the CSV download
+  entirely. No third-party host can do this — browsers block cross-origin
+  authenticated requests. Worth chasing if access is possible. **Verified
+  endpoints (2026.09.21, logged in):** per-MID detail is server-rendered HTML
+  at `/search/?mid=<MID>` (17 columns incl. ARN, reason, $ amount, issuer,
+  brand, dates), with a per-MID CSV at `download.jsp?mid=<MID>`. There is **no
+  JSON API** (zero XHR on the page) and **no bulk detail export** — the report
+  Download is just the summary grid. See "## Chargeback detail" below.
 
 ## Tone the user expects
 
