@@ -1022,7 +1022,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.22";
+const APP_VERSION   = "2026.09.23";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -2216,6 +2216,7 @@ const FOLDER = {
       DETAIL.reset();
       detailFiles.forEach(f=>{ try{ DETAIL.add(f.text, f.name); }
         catch(e){ skipped.push(f.name+": "+(e.message||e)); } });
+      DETAIL.fromFolder = true;   /* the folder is the durable copy; localStorage is only a cache */
     }
     this.found=out.length; this.skipped=skipped;
     return out;
@@ -4828,8 +4829,11 @@ const FRAUD_REASONS = /fraud|no cardholder|unauthor/i;
 
 function looksLikeDetail(text){
   try{
-    const raw = parseCSV(text); if(!raw.length) return false;
-    const head = raw[0].map(h=>String(h).trim().toLowerCase());
+    /* header-only — a real detail file can be several MB (tens of thousands of
+       cases); parsing the whole thing just to sniff the type would stall every
+       folder scan. The header alone is decisive. */
+    const firstLine = String(text).replace(/^﻿/,"").split(/\r?\n/,1)[0] || "";
+    const head = (parseCSV(firstLine)[0] || []).map(h=>String(h).trim().toLowerCase());
     const keys = head.map(h=>DETAIL_COLS[h]).filter(Boolean);
     return keys.indexOf("id")>=0 && DETAIL_SIGNATURE.every(k=>keys.indexOf(k)>=0);
   }catch(e){ return false; }
@@ -4895,8 +4899,8 @@ function summariseDetail(rows){
    survives a reload. Everything it holds is masked/public (masked PANs, ARNs);
    it is same-origin only, exactly like the report library. */
 const DETAIL = {
-  rows:[], byMid:{}, meta:null,
-  reset(){ this.rows=[]; this.byMid={}; this.meta=null; },
+  rows:[], byMid:{}, meta:null, saved:true, fromFolder:false,
+  reset(){ this.rows=[]; this.byMid={}; this.meta=null; this.saved=true; this.fromFolder=false; },
   add(text, name){
     const rows = parseDetailRows(text);
     if(!rows.length) throw new Error("No chargeback rows found under the header.");
@@ -4905,16 +4909,26 @@ const DETAIL = {
     this.meta = { name:name || (this.meta&&this.meta.name) || "details.csv",
       rows:this.rows.length, mids:Object.keys(this.byMid).length, at:Date.now() };
     this.persist();
-    return {rows:rows.length, mids:this.meta.mids};
+    return {rows:rows.length, mids:this.meta.mids, saved:this.saved};
   },
   get(mid){ return this.byMid[mid]||null; },
   has(){ return !!(this.meta && this.rows.length); },
   clear(){ this.reset(); try{ localStorage.removeItem(DETAIL_LS); }catch(e){} },
-  persist(){ try{ localStorage.setItem(DETAIL_LS,
-    JSON.stringify({rows:this.rows, meta:this.meta})); }catch(e){} },
+  /* localStorage caps around 5MB; a real detail export runs to tens of
+     thousands of cases and blows past it. When that happens the write throws
+     QuotaExceededError — DO NOT swallow it: record that the detail is not saved
+     so the UI can tell the operator to keep it in the folder instead, where the
+     scan re-reads it every load with no size cap. */
+  persist(){
+    try{ localStorage.setItem(DETAIL_LS, JSON.stringify({rows:this.rows, meta:this.meta}));
+      this.saved=true; }
+    catch(e){ this.saved=false;
+      try{ localStorage.removeItem(DETAIL_LS); }catch(_){}   /* don't leave a truncated half */ }
+    return this.saved;
+  },
   restore(){ try{ const raw=localStorage.getItem(DETAIL_LS); if(!raw) return;
     const o=JSON.parse(raw); this.rows=o.rows||[]; this.meta=o.meta||null;
-    this.byMid=summariseDetail(this.rows); }catch(e){} }
+    this.byMid=summariseDetail(this.rows); this.saved=true; }catch(e){} }
 };
 
 /* The panel under an audit card. Rendered only when detail exists for THIS MID
@@ -5057,6 +5071,7 @@ function finishRender(P, A, V){
   wireDynamic();
   wireNav();
   wireMidTrend();
+  if(VIEW.page==="issuers") wireIssuers();
 
   /* footer */
   const stampA = SNAP_A.stamp ? SNAP_A.stamp : "timestamp not in filename";
@@ -5243,6 +5258,39 @@ function forecastPageHTML(){
    merchant's CURRENT month-to-date figures, a present-status proxy, not the RDR
    state on each case's day. Nothing here is scored.
    ============================================================ */
+let ISSUER_VIEW = null;   /* last issuerData(), for the lazy case-table build */
+const ISSUER_CASE_CAP = 400;   /* one issuer can hold thousands of cases; cap the DOM, point to export */
+function issuerCasesHTML(g){
+  const covTxt = c => c==null ? "—" : Number(c).toFixed(0)+"%";
+  const shown = g.cases.slice(0, ISSUER_CASE_CAP);
+  const body = shown.map(c=>`<tr class="${c.rdrOn?"rdron":""}">
+    <td>${esc(c.merch||c.mid)}</td>
+    <td class="bin">${esc(c.bin||"—")}</td>
+    <td class="arn">${esc(c.arn||"—")}</td>
+    <td>${esc(c.reason||"—")}</td>
+    <td class="amt">${fmtM(c.amt,2)}</td>
+    <td class="cov">${c.rdrOn?`RDR on · cov ${covTxt(c.cov)}`:`<span class="muted">RDR off</span>`}</td>
+    <td class="tdt">${esc(c.tdate||"")}</td></tr>`).join("");
+  const more = g.cases.length>ISSUER_CASE_CAP
+    ? `<div class="cbnote">Showing ${ISSUER_CASE_CAP.toLocaleString()} of ${g.cases.length.toLocaleString()} cases — the full list is in the details export.</div>` : "";
+  return `<table class="arns wide">
+      <thead><tr><th>Merchant</th><th>BIN</th><th>ARN</th><th>Reason</th>
+        <th class="amt">Amount</th><th>Merchant RDR</th><th>Trans. date</th></tr></thead>
+      <tbody>${body}</tbody></table>${more}`;
+}
+function wireIssuers(){
+  document.querySelectorAll(".isr-row").forEach(d=>{
+    d.addEventListener("toggle", ()=>{
+      if(!d.open) return;
+      const box = d.querySelector(".isr-cases");
+      if(!box || box.getAttribute("data-built")==="1") return;
+      const g = ISSUER_VIEW && ISSUER_VIEW.issuers[+d.getAttribute("data-ix")];
+      if(!g) return;
+      box.innerHTML = issuerCasesHTML(g);
+      box.setAttribute("data-built","1");
+    });
+  });
+}
 function issuerData(){
   if(!DETAIL.has()) return {ok:false, reason:"no-detail"};
   const byMid = (window.__A && window.__A.byMid) || {};
@@ -5290,20 +5338,16 @@ function issuerPageHTML(){
       : "No chargeback detail is loaded. Pull it from the portal (Copy flagged MIDs → the detail bookmarklet) and paste it in, then this view fills.";
     return `<div class="page"><div class="empty">${why}</div></div>`;
   }
-  const chip=(t,cls)=>`<span class="chip${cls?" "+cls:""}">${t}</span>`;
-  const covTxt = c => c==null ? "—" : Number(c).toFixed(0)+"%";
-  const row = g => {
+  ISSUER_VIEW = D;   /* stash so the lazy toggle handler can reach each issuer's cases */
+  /* A book can carry tens of thousands of Visa cases across hundreds of issuers.
+     Rendering every case up front is a multi-MB DOM that stalls scrolling — so
+     the summary grid is rendered eagerly (one light row per issuer) and each
+     issuer's case table is built on demand when its row is opened
+     (wireIssuers, issuerCasesHTML). */
+  const row = (g,i) => {
     const bins = g.binList.slice(0,4).map(b=>`<span class="binpill">${esc(b)}</span>`).join("")
       + (g.binList.length>4?` <span class="muted">+${g.binList.length-4}</span>`:"");
-    const cases = g.cases.map(c=>`<tr class="${c.rdrOn?"rdron":""}">
-      <td>${esc(c.merch||c.mid)}</td>
-      <td class="bin">${esc(c.bin||"—")}</td>
-      <td class="arn">${esc(c.arn||"—")}</td>
-      <td>${esc(c.reason||"—")}</td>
-      <td class="amt">${fmtM(c.amt,2)}</td>
-      <td class="cov">${c.rdrOn?`RDR on · cov ${covTxt(c.cov)}`:`<span class="muted">RDR off</span>`}</td>
-      <td class="tdt">${esc(c.tdate||"")}</td></tr>`).join("");
-    return `<details class="isr-row${g.atRdrOn?" hot":""}">
+    return `<details class="isr-row${g.atRdrOn?" hot":""}" data-ix="${i}">
       <summary class="isr-grid">
         <span class="i-name">${esc(g.bank)}</span>
         <span class="i-bins">${bins||'<span class="muted">no BIN</span>'}</span>
@@ -5313,13 +5357,7 @@ function issuerPageHTML(){
         <span class="i-mid">${g.nMids}</span>
         <span class="i-rsn">${esc(g.topReason||"—")}</span>
       </summary>
-      <div class="isr-cases">
-        <table class="arns wide">
-          <thead><tr><th>Merchant</th><th>BIN</th><th>ARN</th><th>Reason</th>
-            <th class="amt">Amount</th><th>Merchant RDR</th><th>Trans. date</th></tr></thead>
-          <tbody>${cases}</tbody>
-        </table>
-      </div>
+      <div class="isr-cases" data-built="0"></div>
     </details>`;
   };
   return `<div class="page">
@@ -5340,7 +5378,7 @@ function issuerPageHTML(){
         <span class="i-amt">$ exposure</span><span class="i-mid">Merch.</span>
         <span class="i-rsn">Top reason</span>
       </div>
-      ${D.issuers.map(row).join("")}
+      ${D.issuers.map((g,i)=>row(g,i)).join("")}
     </div>
     <div class="isr-note">
       Ranked by cases at RDR-on merchants, then volume. Every case here already
@@ -6136,9 +6174,15 @@ function ingestFiles(files){
     const bits=[];
     if(added) bits.push(added+" report"+(added===1?"":"s")+" added");
     if(replaced) bits.push(replaced+" refreshed");
-    if(detailCases) bits.push(detailCases+" chargeback case"+(detailCases===1?"":"s")
+    if(detailCases) bits.push(detailCases.toLocaleString()+" chargeback case"+(detailCases===1?"":"s")
       +" across "+detailMids+" MID"+(detailMids===1?"":"s"));
     if(bits.length) toast(bits.join(", ")+".");
+    if(detailCases && !DETAIL.saved && !DETAIL.fromFolder){
+      showErr("The chargeback detail is too large for this browser's storage — it is loaded now "
+        +"but will not survive a reload. Keep details.csv in your "
+        +(folderMode()?FOLDER.name:"connected")+" folder; the console reloads it from there every "
+        +"time, with no size limit.");
+    }
   }
 }
 
@@ -6154,9 +6198,18 @@ function ingestText(csv, name){
     try{
       const r = DETAIL.add(String(csv), name);
       renderDataStrip(); render(); clearErr();
-      toast("Chargeback detail loaded — "+r.rows+" case"+(r.rows===1?"":"s")
-        +" across "+r.mids+" MID"+(r.mids===1?"":"s")+".");
-      return {ok:true, detail:true, rows:r.rows, mids:r.mids};
+      if(r.saved){
+        toast("Chargeback detail loaded — "+r.rows+" case"+(r.rows===1?"":"s")
+          +" across "+r.mids+" MID"+(r.mids===1?"":"s")+".");
+      } else {
+        /* too big for this browser's storage — it is live now but will not
+           survive a reload from the paste box. The folder is the durable home. */
+        showErr("Detail loaded ("+r.rows.toLocaleString()+" cases) but it is too large to keep "
+          +"in this browser — it will vanish on reload. Save the file as details.csv in your "
+          +(folderMode()?FOLDER.name:"connected")+" folder instead; the console reloads it from "
+          +"there every time, with no size limit.");
+      }
+      return {ok:true, detail:true, rows:r.rows, mids:r.mids, saved:r.saved};
     }catch(err){
       showErr("Could not load the chargeback detail: "+((err&&err.message)||err));
       return {ok:false, msg:(err&&err.message)||String(err)};

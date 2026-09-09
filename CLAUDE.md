@@ -703,7 +703,28 @@ did not deflect, so they can be escalated to RDR/Ethoca or blocked.
   the RDR state on each case's day. Nothing here is scored — `issuerData` never
   touches `MODEL` or `analyse`.
 - Rows are `<details>` on a shared CSS grid (`.isr-grid`) so columns align like a
-  table yet expand to the per-case ARN list without JS wiring.
+  table. **Cases are lazy-rendered** (`wireIssuers` builds `issuerCasesHTML` on
+  the first `toggle` open, capped at `ISSUER_CASE_CAP`=400): a real book runs to
+  ~16k Visa cases across ~800 issuers, and rendering them all up front is a
+  multi-MB DOM that stalls scrolling. Measured on the live book: eager render
+  265ms / 5.4MB DOM → lazy 38ms / 0.42MB.
+
+### Where detail is stored — the folder, not localStorage
+
+**A real detail export is large — measured 22,950 cases, 5.7MB, for 29 flagged
+MIDs** (the list is the full multi-month history, not month-to-date). That does
+**not** fit `localStorage`'s ~5MB cap. `DETAIL.persist()` therefore records
+`saved`: on `QuotaExceededError` it sets `saved=false` and clears the half-write
+rather than swallowing the error, and the paste/file ingest then tells the
+operator the detail will not survive a reload and to keep `details.csv` in the
+folder instead. **The folder is the durable home:** `FOLDER.scan()` routes any
+detail CSV in the folder into `DETAIL` on every load (`DETAIL.fromFolder=true`),
+with no size cap and shared with the team — exactly like reports. `looksLikeDetail`
+sniffs the header line only, so a multi-MB file does not get fully parsed just to
+be classified on every scan. localStorage stays as a best-effort cache for small
+detail / non-folder users. This was a real miss first shipped 2026.09.21 (paste
+of a 5.7MB export silently failed to persist and vanished on reload); fixed
+2026.09.23.
 
 ### The detail pull (bookmarklet)
 
