@@ -832,3 +832,18 @@ Direct, concrete, no padding. Report what was actually verified and how, name
 what you did not check, and flag your own mistakes rather than letting them
 surface later. Do not claim something works because it parsed or because it
 looked right — say what you ran and what it returned.
+
+## ACHWATCH at /ach/
+A second, separate tool — the Payarc ACH reject escalation tracker — is served
+from `public/ach/` on this site, reached by the **ACH Watch** button in the
+topbar. It is a self-contained page with its own version, its own model and its
+own test suite; nothing is shared with this app but the origin.
+
+That is safe because the storage namespaces are disjoint: this app uses
+`cbrc.*` in localStorage and IndexedDB `cbrc.fs`; ACHWATCH uses `achwatch.*` and
+IndexedDB `achwatch`. **Do not rename either set without checking the other.**
+
+`public/ach/` is a **build artifact — never edit it here.** It is developed and
+tested in `~/Documents/ACHWATCH` and copied across by that repo's
+`sync-to-cbaudit.sh`. Editing it in this repo is silently reverted on the next
+sync. The `/ach/` cache rules live in this repo's `public/_headers`.

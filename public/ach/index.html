@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ACHWATCH</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9888;</text></svg>">
+<style>
+/* ============ 1. THEME TOKENS — restyle by editing values here only ============ */
+:root{
+  --page:#f6f7f9; --surface:#fff; --surface2:#f0f2f5; --surface3:#e7eaef;
+  --ink:#12161c; --ink2:#4a5464; --ink3:#79839a;
+  --line:#dde1e8; --line2:#c6ccd8;
+  --accent:#1f5fd0; --accent-ink:#fff; --accent-soft:#e8effc;
+  --ok:#0d7a4a; --ok-soft:#e2f5eb;
+  --warn:#9a6100; --warn-soft:#fdf1dc;
+  --danger:#b3261e; --danger-soft:#fdeceb;
+  --crit:#7b1fa2; --crit-soft:#f5e9fa;
+  --grey-soft:#eceef2;
+  --fs:14px; --fs-sm:12.5px; --fs-xs:11.5px; --r:10px; --r-sm:6px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+}
+@media (prefers-color-scheme:dark){:root{
+  --page:#0e1116; --surface:#161a21; --surface2:#1d222b; --surface3:#262c38;
+  --ink:#e8ecf3; --ink2:#a4aec0; --ink3:#78829a;
+  --line:#2a313d; --line2:#39424f;
+  --accent:#6ea0f5; --accent-ink:#0e1116; --accent-soft:#1a2740;
+  --ok:#54d19a; --ok-soft:#122a20;
+  --warn:#e8b45c; --warn-soft:#2e2415;
+  --danger:#f28b82; --danger-soft:#331b19;
+  --crit:#d9a2ee; --crit-soft:#2b1b33;
+  --grey-soft:#232833;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}}
+
+/* ============ 2. LAYOUT + COMPONENTS ============ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--page);color:var(--ink);font:var(--fs)/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+a{color:var(--accent)}
+button{font:inherit;cursor:pointer}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.muted{color:var(--ink2)} .muted3{color:var(--ink3)}
+.hide{display:none!important}
+
+#banner{display:none;padding:9px 16px;background:var(--accent);color:var(--accent-ink);font-size:var(--fs-sm);font-weight:600;text-align:center}
+#banner button{margin-left:10px;background:var(--accent-ink);color:var(--accent);border:0;border-radius:var(--r-sm);padding:3px 10px;font-weight:650}
+
+header{position:sticky;top:0;z-index:40;background:var(--surface);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.hbar{display:flex;align-items:center;gap:14px;padding:10px 18px;flex-wrap:wrap}
+.brand{font-weight:750;font-size:16px;letter-spacing:-.02em;display:flex;align-items:center;gap:7px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--danger)}
+.ver{font-family:var(--mono);font-size:var(--fs-xs);color:var(--ink3)}
+.spacer{flex:1}
+nav{display:flex;gap:2px;padding:0 12px 8px;flex-wrap:wrap}
+nav button{background:transparent;border:1px solid transparent;color:var(--ink2);padding:6px 12px;border-radius:var(--r-sm);font-size:var(--fs-sm);font-weight:600}
+nav button:hover{background:var(--surface2);color:var(--ink)}
+nav button[aria-current="true"]{background:var(--accent);color:var(--accent-ink)}
+nav button .cnt{font-family:var(--mono);opacity:.75;margin-left:5px;font-size:var(--fs-xs)}
+
+.btn{background:var(--surface2);border:1px solid var(--line2);color:var(--ink);padding:6px 12px;border-radius:var(--r-sm);font-size:var(--fs-sm);font-weight:600}
+.btn:hover{background:var(--surface3)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.sm{padding:3px 9px;font-size:var(--fs-xs)}
+
+main{padding:18px;max-width:1600px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.card>h2{padding:12px 16px;border-bottom:1px solid var(--line);font-size:var(--fs);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.card>h2 .sub{font-weight:450;color:var(--ink2);font-size:var(--fs-sm)}
+.pad{padding:16px}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;box-shadow:var(--shadow)}
+.tile .k{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);font-weight:700}
+.tile .v{font-family:var(--mono);font-size:clamp(17px,1.55vw,24px);font-weight:600;letter-spacing:-.03em;
+  margin-top:5px;line-height:1.15;overflow-wrap:anywhere}
+.tile .n{font-size:var(--fs-xs);color:var(--ink2);margin-top:4px}
+.tile.danger .v{color:var(--danger)} .tile.warn .v{color:var(--warn)} .tile.ok .v{color:var(--ok)}
+
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:var(--fs-sm)}
+th{text-align:left;padding:8px 11px;background:var(--surface2);border-bottom:1px solid var(--line);font-weight:700;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.04em;color:var(--ink2);white-space:nowrap;position:sticky;top:0}
+th.num,td.num{text-align:right}
+td{padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:hover{background:var(--surface2)}
+tr.clk{cursor:pointer}
+.neg{color:var(--danger)}
+
+.pill{display:inline-block;padding:1.5px 8px;border-radius:99px;font-size:var(--fs-xs);font-weight:700;white-space:nowrap;line-height:1.6}
+.p-ok{background:var(--ok-soft);color:var(--ok)}
+.p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-danger{background:var(--danger-soft);color:var(--danger)}
+.p-crit{background:var(--crit-soft);color:var(--crit)}
+.p-accent{background:var(--accent-soft);color:var(--accent)}
+.p-grey{background:var(--grey-soft);color:var(--ink2)}
+
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);margin-bottom:4px}
+.srcopt{background:var(--surface);padding:18px 20px;display:flex;flex-direction:column;gap:9px}
+.srcopt.reco{box-shadow:inset 3px 0 0 var(--ok)}
+.srcopt h3 .pill{margin-left:6px;vertical-align:1px}
+.srcopt h3{font-size:15px;font-weight:650}
+.srcopt p{margin:0;font-size:var(--fs-sm);color:var(--ink2);line-height:1.45}
+.srcopt p.muted3{font-size:var(--fs-xs);margin-top:auto}
+.srcopt .f{margin-top:2px}
+.srcopt input[type=text]{flex:1;min-width:130px}
+.srcopt button[disabled]{opacity:.45;cursor:not-allowed}
+
+.srcchip{display:inline-flex;align-items:center;gap:7px;padding:3px 8px 3px 10px;
+  border:1px solid var(--line2);border-radius:99px;background:var(--surface2);
+  font-size:var(--fs-xs);font-weight:600;max-width:340px}
+.srcchip.warn{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.srcchip .dot2{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.srcchip.warn .dot2{background:var(--warn)}
+.srcchip>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.drop{border:2px dashed var(--line2);border-radius:var(--r);padding:36px 20px;text-align:center;background:var(--surface);transition:.12s}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop h3{font-size:16px;margin-bottom:6px}
+.drop p{color:var(--ink2);font-size:var(--fs-sm);margin:5px 0 14px}
+
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.col{background:var(--surface2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.col h3{padding:9px 12px;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;background:var(--surface)}
+.col .body{padding:8px;display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto}
+.mcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-size:var(--fs-xs);cursor:pointer}
+.mcard:hover{border-color:var(--accent)}
+.mcard .d{font-weight:650;font-size:var(--fs-sm);margin-bottom:3px;word-break:break-word}
+.mcard .m{display:flex;justify-content:space-between;gap:6px;color:var(--ink2)}
+
+/* two-column panels; collapse to one on narrow screens */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media (max-width:1080px){ .two{grid-template-columns:1fr} }
+
+/* escalation ladder — also the stage filter */
+.ladderwrap{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line)}
+.rung{appearance:none;text-align:left;background:var(--surface);border:0;
+  border-top:3px solid var(--rg,var(--line2));padding:11px 13px 13px;
+  display:flex;flex-direction:column;gap:4px;min-height:112px;color:inherit;font:inherit;cursor:pointer}
+.rung:hover:not(.static){background:var(--surface2)}
+.rung.static{cursor:default;opacity:.72}
+.rung[aria-current="true"]{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+.rung .rn{font-family:var(--mono);font-size:var(--fs-xs);color:var(--ink3);letter-spacing:.09em}
+.rung .rt{font-weight:650;font-size:var(--fs-sm);line-height:1.2}
+.rung .rc{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1;
+  margin-top:auto;color:var(--rg,var(--ink));font-variant-numeric:tabular-nums}
+.rung .rm{font-size:var(--fs-xs);color:var(--ink3);line-height:1.3}
+.rung.s0{--rg:var(--ok)} .rung.s1{--rg:var(--warn)} .rung.s2{--rg:var(--warn)}
+.rung.s3{--rg:var(--danger)} .rung.s4{--rg:var(--danger)} .rung.s5{--rg:var(--crit)}
+@media (max-width:900px){ .ladderwrap{grid-template-columns:repeat(3,1fr)} }
+@media (max-width:520px){ .ladderwrap{grid-template-columns:repeat(2,1fr)} }
+
+/* segmented table / board switch */
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:var(--r-sm);overflow:hidden}
+.segb{background:var(--surface);border:0;color:var(--ink2);padding:4px 12px;
+  font-size:var(--fs-xs);font-weight:650;border-left:1px solid var(--line2)}
+.segb:first-child{border-left:0}
+.segb:hover{background:var(--surface2)}
+.segb[aria-current="true"]{background:var(--accent);color:var(--accent-ink)}
+
+.lnk{text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-weight:650}
+
+.tl{position:relative;padding-left:22px}
+.tl:before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.ev{position:relative;padding:7px 0 7px 4px;font-size:var(--fs-sm);display:grid;grid-template-columns:92px 1fr auto;gap:10px;align-items:baseline}
+.ev:before{content:"";position:absolute;left:-20px;top:13px;width:9px;height:9px;border-radius:50%;background:var(--ink3);border:2px solid var(--surface)}
+.ev.e-rej:before{background:var(--danger)} .ev.e-res:before{background:var(--crit)}
+.ev.e-hold:before{background:var(--warn)} .ev.e-close:before{background:var(--ink)}
+.ev.e-col:before{background:var(--crit)} .ev.e-pay:before{background:var(--ok)}
+
+.f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=search],input[type=text],select,textarea{font:inherit;font-size:var(--fs-sm);padding:5px 9px;border:1px solid var(--line2);border-radius:var(--r-sm);background:var(--surface);color:var(--ink)}
+input[type=search]{min-width:200px}
+textarea{width:100%;min-height:54px;resize:vertical}
+label.chk{display:flex;align-items:center;gap:5px;font-size:var(--fs-sm);color:var(--ink2);white-space:nowrap}
+
+dialog{border:1px solid var(--line);border-radius:var(--r);padding:0;background:var(--surface);color:var(--ink);max-width:min(1000px,94vw);width:100%;box-shadow:0 12px 40px rgba(0,0,0,.28)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg-h{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;position:sticky;top:0;background:var(--surface);z-index:2}
+.dlg-b{padding:18px;max-height:74vh;overflow-y:auto}
+
+.note{background:var(--warn-soft);border:1px solid var(--warn);color:var(--warn);border-radius:var(--r-sm);padding:9px 12px;font-size:var(--fs-sm);margin-bottom:12px}
+.note.err{background:var(--danger-soft);border-color:var(--danger);color:var(--danger)}
+.note.info{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.empty{padding:44px 20px;text-align:center;color:var(--ink3);font-size:var(--fs-sm)}
+.bar{height:7px;border-radius:99px;background:var(--surface3);overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:var(--fs-sm)}
+.kv dt{color:var(--ink3);font-weight:600;white-space:nowrap}
+.kv dd{margin:0;font-family:var(--mono)}
+.sechead{font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);font-weight:700;margin:16px 0 7px}
+.sechead:first-child{margin-top:0}
+</style>
+</head>
+<body>
+<div id="banner">A new version of ACHWATCH is available.<button onclick="location.reload(true)">Reload</button></div>
+<header>
+  <div class="hbar">
+    <div class="brand"><span class="dot"></span>ACHWATCH</div>
+    <span class="ver" id="verlbl"></span>
+    <span class="spacer"></span>
+    <span class="ver" id="asof"></span>
+    <button class="btn hide" id="btnCb">&larr; Chargeback Console</button>
+    <span id="srcChip" class="srcchip hide"></span>
+    <button class="btn" id="btnReload">Reload</button>
+    <button class="btn" id="btnAdd">Add files</button>
+    <button class="btn" id="btnExpCase">Export cases</button>
+    <button class="btn" id="btnImpCase">Import cases</button>
+  </div>
+  <nav id="nav"></nav>
+</header>
+<main id="app"></main>
+<input type="file" id="fileIn" multiple accept=".xlsx,.xlsm,.xls" class="hide">
+<input type="file" id="caseIn" accept=".json" class="hide">
+<dialog id="dlg"><div class="dlg-h"><h2 id="dlgT"></h2><span class="spacer"></span><button class="btn" onclick="document.getElementById('dlg').close()">Close</button></div><div class="dlg-b" id="dlgB"></div></dialog>
+<script src="vendor/xlsx.full.min.js"></script>
+<script>
+"use strict";
+/* ============ 3. VERSION — stamped by release.sh, do not hand-edit ============ */
+const APP_VERSION   = "2026.09.08e";
+const MODEL_VERSION = "m1.1";
+
+/* ============ 4. DATA LOADING — all parsing in-browser, nothing uploaded ======= */
+const DB = {
+  files:[],                 // {name, reportDate, dateSource, counts}
+  rejects:new Map(),        // traceKey -> reject row (union of all files)
+  quarantine:[],            // rows that failed integrity checks
+  snaps:new Map(),          // mid -> [snapshot per file, ascending by reportDate]
+  ledger:new Map(),         // mid -> {dba, events:[], _k:Set}  (unioned, deduped)
+  ledgerFiles:[],           // which files contributed ledger rows
+  asOf:null
+};
+const REJECT_FEE = 35;      // DOMAIN FACT: flat $35 per reject, verified 2488/2488 rows
+
+const norm = s => String(s==null?"":s).toLowerCase().replace(/[^a-z0-9]+/g,"");
+const S    = v => v==null ? "" : String(v).trim();
+const num  = v => { if(v==null||v==="")return 0; if(typeof v==="number") return isFinite(v)?v:0;
+  let t=String(v).trim().replace(/[$,\s]/g,""); let neg=false;
+  if(/^\(.*\)$/.test(t)){ neg=true; t=t.slice(1,-1); }   // accounting negatives: (542.84)
+  const n=parseFloat(t); return isFinite(n)?(neg?-n:n):0; };
+const isTrue = v => /^(true|yes|y|1)$/i.test(S(v));
+const DAY = 86400000;
+const d0 = d => d ? new Date(d.getFullYear(),d.getMonth(),d.getDate()) : null;
+const days = (a,b) => (a&&b) ? Math.round((d0(b)-d0(a))/DAY) : null;
+const fmtD = d => { if(!d) return "—"; const p=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); };
+const fmt$ = (n,dash) => (n==null||(dash&&!n)) ? "—" :
+  (n<0?"-":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toDate(v){
+  if(v instanceof Date && !isNaN(v)) return v;
+  if(typeof v === "number" && v>=1 && v<=2958465){ const o=XLSX.SSF.parse_date_code(v); if(o&&o.y) return new Date(o.y,o.m-1,o.d); }
+  if(typeof v === "string"){ const t=Date.parse(v); if(!isNaN(t)) return new Date(t); }
+  return null;
+}
+
+/* -- Column resolution. Headers RENAME between files (Customer ID <-> MID), so we
+      resolve by alias set and fall back to fixed position. Never match exact text. -- */
+const MERCH_ALIAS = {
+  mid:["mid","customerid"], dba:["dba","customername"], ctype:["customertypeid"],
+  lastReject:["lastrejectdate","lastinvoicedate"],
+  lastCode:["lsatrejectcode","lastrejectcode","reasoncodedescription"],
+  hold:["100fundshold"], holdBal:["100fundsholdbalance"], reserves:["merchantreserves"],
+  closed:["midstatusclosed"], totalDue:["totaldue"], lastProc:["lastprocesseddate"]
+};
+const LEDGER_ALIAS = {
+  customer:["customer"], date:["date"], doc:["documentorpaymentid","documentid"],
+  ref:["reference"], memo:["memo"],
+  charges:["chargesusd","charges"], payments:["paymentsusd","payments"], balance:["balanceusd","balance"]
+};
+function resolve(hdr, alias){
+  const H = hdr.map(norm), out = {};
+  for(const k in alias){ out[k] = H.findIndex(h => alias[k].includes(h)); }
+  return out;
+}
+const sheetOf = (wb,...pats) => wb.SheetNames.find(n => pats.some(p => n.toLowerCase().includes(p)));
+const rowsOf  = (wb,name) => name ? XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,cellDates:false,defval:null,blankrows:false}) : [];
+
+/* Report date: prefer the filename (that is the week the processor sent it);
+   fall back to the newest data date in the file, and say which we used. */
+const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function reportDateFrom(name, fallback){
+  const n = name.toLowerCase();
+  let m = n.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if(m) return {d:new Date(+m[3],+m[1]-1,+m[2]), src:"filename"};
+  m = n.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/);
+  if(m){
+    const yM = n.match(/\b(20\d{2})\b/);
+    const y = yM ? +yM[1] : (fallback ? fallback.getFullYear() : new Date().getFullYear());
+    return {d:new Date(y,MONTHS[m[1]],+m[2]), src:"filename"};
+  }
+  return fallback ? {d:fallback, src:"newest row in file"} : {d:null, src:"unknown"};
+}
+
+async function ingest(fileList){
+  const errs = [];
+  for(const f of fileList){
+    if(DB.files.some(x=>x.name===f.name)) continue;   // ingest is idempotent
+    try{
+      const buf = f.buf ? f.buf : await f.arrayBuffer();
+      const wb = XLSX.read(buf, {type:"array"});
+      const counts = {rejects:0, merchants:0, ledger:0, quarantined:0};
+      let newest = null;
+
+      // ---- ACH Rejects (fixed 8 columns; union across files keyed on Trace ID) ----
+      const rs = rowsOf(wb, sheetOf(wb,"reject"));
+      for(let i=1;i<rs.length;i++){
+        const r = rs[i]; if(!r || r[0]==null || S(r[0])==="") continue;
+        const date = toDate(r[3]);
+        const amount = num(r[2]), amountFee = num(r[7]);
+        const traceRaw = r[4];
+        const traceNum = typeof traceRaw==="number" ? traceRaw : parseFloat(S(traceRaw));
+        const bad = [];
+        if(!Number.isSafeInteger(traceNum)) bad.push("Trace ID lost precision in the source file");
+        if(S(r[6]) !== "" && /^\d+$/.test(S(r[6])) && S(r[6]).length>6) bad.push("Fee Type contains a number (columns shifted)");
+        if(Math.abs(amountFee - amount - REJECT_FEE) > 0.005) bad.push("Amount + Fee is not Amount + $"+REJECT_FEE);
+        const row = {mid:S(r[0]), dba:S(r[1]), amount, date, trace:S(traceRaw),
+                     reason:S(r[5]), feeType:S(r[6]), amountFee, src:[f.name]};
+        if(bad.length){ DB.quarantine.push({...row, file:f.name, why:bad}); counts.quarantined++; continue; }
+        counts.rejects++;
+        if(date && (!newest || date>newest)) newest = date;
+        const key = row.mid+"|"+row.trace+"|"+fmtD(date)+"|"+amount.toFixed(2);
+        const prev = DB.rejects.get(key);
+        if(prev){ if(!prev.src.includes(f.name)) prev.src.push(f.name); }
+        else DB.rejects.set(key, row);
+      }
+
+      // ---- Merchants snapshot (one per file = the time series) ----
+      const mn = wb.SheetNames.find(n=>{const l=n.toLowerCase();return l.includes("merchant")&&!l.includes("ledger");});
+      const ms = rowsOf(wb, mn);
+      if(ms.length>1){
+        const C = resolve(ms[0], MERCH_ALIAS);
+        for(let i=1;i<ms.length;i++){
+          const r = ms[i]; if(!r) continue;
+          const mid = S(C.mid>=0 ? r[C.mid] : r[0]); if(!mid || !/^\d+$/.test(mid)) continue;
+          counts.merchants++;
+          const g = k => C[k]>=0 ? r[C[k]] : null;
+          const lr = toDate(g("lastReject"));
+          if(lr && (!newest || lr>newest)) newest = lr;
+          const snap = {mid, dba:S(C.dba>=0?r[C.dba]:r[1]),
+            lastReject:lr, lastCode:S(g("lastCode")),
+            hold:isTrue(g("hold")), holdBal:num(g("holdBal")), reserves:num(g("reserves")),
+            closed:isTrue(g("closed")), totalDue:num(g("totalDue")), lastProc:toDate(g("lastProc")),
+            file:f.name};
+          if(!DB.snaps.has(mid)) DB.snaps.set(mid,[]);
+          DB.snaps.get(mid).push(snap);
+        }
+      }
+
+      // ---- AR Ledger (grouped: header row "MID - DBA", rows, "Total for X") ----
+      const ls = rowsOf(wb, sheetOf(wb,"ledger"));
+      const led = new Map();
+      if(ls.length>1){
+        const C = resolve(ls[0], LEDGER_ALIAS);
+        const gi = (r,k,d)=> (C[k]>=0 ? r[C[k]] : r[d]);
+        let cur = null;
+        for(let i=1;i<ls.length;i++){
+          const r = ls[i]; if(!r) continue;
+          const c = S(gi(r,"customer",0));
+          if(/^total\s+for/i.test(c)){ cur=null; continue; }
+          if(c){ const m=c.match(/^(\d+)\s*-\s*(.*)$/); cur = m?{mid:m[1],dba:m[2].trim()}:null; continue; }
+          if(!cur) continue;
+          const date = toDate(gi(r,"date",1)); if(!date) continue;
+          if(!led.has(cur.mid)) led.set(cur.mid,{dba:cur.dba,events:[]});
+          led.get(cur.mid).events.push({date, doc:S(gi(r,"doc",2)), ref:S(gi(r,"ref",3)),
+            memo:S(gi(r,"memo",4)), chg:num(gi(r,"charges",5)), pay:num(gi(r,"payments",6)), bal:gi(r,"balance",7)});
+          counts.ledger++;
+          if(date>newest) newest = date;
+        }
+      }
+
+      const rd = reportDateFrom(f.name, newest);
+      // Ledger: union across files, deduped on the row's own identity. The sheet
+      // restates in full each week, so an older file is normally a subset of a
+      // newer one — verified exactly on this data (union == newest == 1,371).
+      // Unioning rather than taking the newest means a narrow ad-hoc export
+      // (the Aug 12 file carries only 19 merchants) cannot wipe the history.
+      for(const [mid,L] of led){
+        if(!DB.ledger.has(mid)) DB.ledger.set(mid,{dba:L.dba, events:[], _k:new Set()});
+        const T = DB.ledger.get(mid);
+        if(L.dba && !T.dba) T.dba = L.dba;
+        for(const e of L.events){
+          const k = fmtD(e.date)+"|"+e.doc+"|"+e.ref+"|"+e.memo+"|"+e.chg.toFixed(2)+"|"+e.pay.toFixed(2);
+          if(T._k.has(k)) continue;
+          T._k.add(k); T.events.push(e);
+        }
+      }
+      if(led.size) DB.ledgerFiles.push(f.name);
+      DB.files.push({name:f.name, reportDate:rd.d, dateSource:rd.src, counts, hasLedger:led.size>0});
+    }catch(e){ errs.push(f.name+": "+e.message); }
+  }
+  for(const [,arr] of DB.snaps) arr.sort((a,b)=>{
+    const A=DB.files.find(f=>f.name===a.file), B=DB.files.find(f=>f.name===b.file);
+    return (A?.reportDate||0) - (B?.reportDate||0);
+  });
+  DB.asOf = DB.files.reduce((m,f)=> (f.reportDate && (!m || f.reportDate>m)) ? f.reportDate : m, null);
+  return errs;
+}
+
+
+/* ============ 4b. FOLDER SOURCES ============================================
+   Add workbooks to one folder, press Reload, see everything. Two backends sit
+   behind one contract; only bytes cross it, so they can never disagree about
+   what a workbook is.
+
+     DRIVE_IO   Google Drive REST. Works in every browser. Read-only scope.
+     FS_IO      File System Access API — a real folder on this disk, which for
+                most people is a Drive/Dropbox sync folder. Chromium only.
+
+   Contract:  connect(opts) -> {name} · restore() -> {name,granted}|null
+              grant() -> bool · disconnect() · listBooks() -> [{name,buf,modified}]
+
+   Parsing is NOT a backend concern. listBooks returns ArrayBuffers; ingest()
+   turns bytes into records exactly once.
+   ========================================================================== */
+const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const DRIVE_GIS = "https://accounts.google.com/gsi/client";
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+const GSHEET_MIME = "application/vnd.google-apps.spreadsheet";
+const XLSX_MIME   = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const BOOK_RE     = /\.(xlsx|xlsm|xls)$/i;
+/* An OAuth client ID is public, not a secret. Same Google project as CBAUDIT —
+   this origin must be listed under "Authorized JavaScript origins" on that
+   client or sign-in fails with origin_mismatch. Settings override for testing. */
+const DRIVE_CLIENT_ID_BAKED =
+  "829837709828-6ktioqmt9gl94b2q8pr917ngsp8u50r3.apps.googleusercontent.com";
+const DEFAULT_FOLDER_NAME = "ACH Audit Location";
+/* Google Drive for Desktop syncs shared drives to this path on macOS. Shown as a
+   hint only — the browser will not let a page preselect a directory. */
+const LOCAL_HINT = "~/Library/CloudStorage/GoogleDrive-<account>/Shared drives/CB Audit/"
+                 + DEFAULT_FOLDER_NAME;
+
+const DRIVE_IO = {
+  kind:"drive", label:"Google Drive",
+  /* read-only: this tool never writes to the folder */
+  SCOPES:"https://www.googleapis.com/auth/drive.readonly",
+  LS_FOLDER:"achwatch.drive.folder", LS_CLIENT:"achwatch.drive.client",
+  token:null, tokenExp:0, gis:null, folderId:null, folderName:null,
+
+  clientId(){ let v=null; try{ v=localStorage.getItem(this.LS_CLIENT); }catch(e){}
+    return (v && v.trim()) || DRIVE_CLIENT_ID_BAKED; },
+  setClientId(v){ try{ if(v && v.trim()) localStorage.setItem(this.LS_CLIENT,v.trim());
+    else localStorage.removeItem(this.LS_CLIENT); }catch(e){} },
+  available(){ return !!this.clientId(); },
+
+  loadGis(){
+    if(this.gis) return this.gis;
+    this.gis = new Promise((res,rej)=>{
+      if(window.google && google.accounts && google.accounts.oauth2) return res();
+      const el=document.createElement("script");
+      el.src=DRIVE_GIS; el.async=true; el.defer=true;
+      el.onload=()=>res();
+      el.onerror=()=>rej(new Error("Could not load Google sign-in. Check the network."));
+      document.head.appendChild(el);
+    });
+    return this.gis;
+  },
+  /* NOT async, and that is load-bearing: opening the popup must happen inside
+     the click that asked for it. Any await before requestAccessToken spends the
+     browser's user activation and the popup is blocked. */
+  auth(interactive){
+    if(this.token && Date.now() < this.tokenExp-60000) return Promise.resolve(this.token);
+    const cid=this.clientId();
+    if(!cid) return Promise.reject(new Error("No Google client ID is configured."));
+    const go = ()=> new Promise((resolve,reject)=>{
+      let done=false;
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id:cid, scope:this.SCOPES,
+        callback:r=>{ if(done)return; done=true;
+          if(r && r.access_token){ this.token=r.access_token;
+            this.tokenExp=Date.now()+((+r.expires_in||3600)*1000); resolve(this.token); }
+          else reject(new Error((r&&(r.error_description||r.error))||"Google did not return a token.")); },
+        error_callback:err=>{ if(done)return; done=true;
+          const t=err&&err.type;
+          reject(new Error(
+            t==="popup_closed" ? "Sign-in window was closed before finishing." :
+            t==="popup_failed_to_open"
+              ? (interactive?"The sign-in popup was blocked. Allow popups for this site."
+                            :"Sign-in needs a click.")
+            : (err&&err.message)||"Sign-in did not complete."));
+        }
+      });
+      try{ client.requestAccessToken({prompt: interactive?"":"none"}); }
+      catch(e){ if(!done){ done=true; reject(e); } }
+    });
+    if(window.google && google.accounts && google.accounts.oauth2) return go();
+    return this.loadGis().then(go);
+  },
+
+  async api(url,opts,retry){
+    const o=Object.assign({},opts||{});
+    o.headers=Object.assign({},o.headers||{},{Authorization:"Bearer "+this.token});
+    const r=await fetch(url,o);
+    if(r.status===401 && !retry){ this.token=null; this.tokenExp=0;
+      await this.auth(false).catch(()=>this.auth(true));
+      return this.api(url,opts,true); }
+    if(!r.ok){ let msg=r.status+" "+r.statusText;
+      try{ const j=await r.json(); if(j&&j.error&&j.error.message) msg=j.error.message; }catch(e){}
+      const e=new Error(msg); e.status=r.status; throw e; }
+    return r;
+  },
+  /* every call must opt into shared drives explicitly or a team-drive folder is
+     invisible — the commonest way a Drive integration silently sees nothing */
+  q(params){ const p=Object.assign({supportsAllDrives:"true"},params);
+    return Object.keys(p).map(k=>encodeURIComponent(k)+"="+encodeURIComponent(p[k])).join("&"); },
+  async json(url){ return (await this.api(url)).json(); },
+  async list(params){
+    const p=Object.assign({includeItemsFromAllDrives:"true",corpora:"allDrives",
+      pageSize:"200",fields:"files(id,name,mimeType,modifiedTime)"},params);
+    /* narrowing fields drops nextPageToken unless named, and the loop then
+       silently stops after one page */
+    if(p.fields.indexOf("nextPageToken")<0) p.fields="nextPageToken,"+p.fields;
+    const out=[]; let tok=null;
+    do{ const qq=Object.assign({},p); if(tok) qq.pageToken=tok;
+      const j=await this.json(DRIVE_API+"/files?"+this.q(qq));
+      (j.files||[]).forEach(f=>out.push(f)); tok=j.nextPageToken||null;
+    } while(tok && out.length<2000);
+    return out;
+  },
+
+  parseId(v){ if(!v) return null;
+    const m=String(v).match(/\/folders\/([A-Za-z0-9_-]{10,})/); if(m) return m[1];
+    const t=String(v).trim(); return /^[A-Za-z0-9_-]{10,}$/.test(t)?t:null; },
+  async useFolder(id){
+    const f=await this.json(DRIVE_API+"/files/"+encodeURIComponent(id)+"?"
+      +this.q({fields:"id,name,mimeType"}));
+    if(f.mimeType!==FOLDER_MIME) throw new Error("That is a file, not a folder.");
+    this.folderId=f.id; this.folderName=f.name;
+    try{ localStorage.setItem(this.LS_FOLDER,JSON.stringify({id:f.id,name:f.name})); }catch(e){}
+    return {name:f.name};
+  },
+  async connect(opts){
+    await this.auth(true);
+    const given=this.parseId(opts && opts.folder);
+    if(given) return this.useFolder(given);
+    const want=(opts && opts.name) || DEFAULT_FOLDER_NAME;
+    const hits=await this.list({q:`name='${want.replace(/'/g,"\\'")}' and mimeType='${FOLDER_MIME}' and trashed=false`,
+      fields:"files(id,name)"});
+    if(hits.length===1) return this.useFolder(hits[0].id);
+    if(!hits.length) throw new Error(`No folder named “${want}” is shared with this account. `
+      +`Paste the folder link instead.`);
+    const e=new Error("Several folders match that name — paste the link for the one you want.");
+    e.choices=hits.map(h=>({id:h.id,name:h.name})); throw e;
+  },
+  async restore(){
+    if(!this.available()) return null;
+    let saved=null; try{ saved=JSON.parse(localStorage.getItem(this.LS_FOLDER)||"null"); }catch(e){}
+    if(!saved || !saved.id) return null;
+    this.folderId=saved.id; this.folderName=saved.name;
+    try{ await this.auth(false); await this.useFolder(saved.id);
+      return {name:this.folderName, granted:true}; }
+    catch(e){ return {name:saved.name, granted:false}; }
+  },
+  async grant(){ try{ await this.auth(true);
+    if(this.folderId) await this.useFolder(this.folderId); return true; }catch(e){ return false; } },
+  async disconnect(){ this.token=null; this.tokenExp=0; this.folderId=null; this.folderName=null;
+    try{ localStorage.removeItem(this.LS_FOLDER); }catch(e){} },
+
+  async listBooks(){
+    if(!this.folderId) return [];
+    const files=await this.list({
+      q:`'${this.folderId}' in parents and trashed=false and mimeType!='${FOLDER_MIME}'`,
+      fields:"files(id,name,mimeType,modifiedTime)"});
+    /* a workbook someone let Drive convert becomes a Google Sheet and has no
+       .xlsx name — take those too, via export */
+    const want=files.filter(f=>BOOK_RE.test(f.name)||f.mimeType===GSHEET_MIME);
+    const out=[];
+    for(const f of want){
+      const url = f.mimeType===GSHEET_MIME
+        ? DRIVE_API+"/files/"+encodeURIComponent(f.id)+"/export?"+this.q({mimeType:XLSX_MIME})
+        : DRIVE_API+"/files/"+encodeURIComponent(f.id)+"?"+this.q({alt:"media"});
+      const r=await this.api(url);
+      out.push({name: BOOK_RE.test(f.name)?f.name:f.name+".xlsx",
+                buf: await r.arrayBuffer(),
+                modified: f.modifiedTime?Date.parse(f.modifiedTime):0});
+    }
+    return out;
+  }
+};
+
+const FS_IO = {
+  kind:"fs", label:"this computer", handle:null,
+  available(){ return typeof window.showDirectoryPicker==="function"; },
+  async connect(){
+    const h=await window.showDirectoryPicker({mode:"read", id:"achwatch-folder"});
+    this.handle=h; await idbPut("dir",h); return {name:h.name};
+  },
+  async restore(){
+    const h=await idbGet("dir"); if(!h) return null;
+    this.handle=h;
+    const st=await h.queryPermission({mode:"read"}).catch(()=>"prompt");
+    return {name:h.name, granted:st==="granted"};
+  },
+  async grant(){ if(!this.handle) return false;
+    const st=await this.handle.requestPermission({mode:"read"}).catch(()=>"denied");
+    return st==="granted"; },
+  async disconnect(){ this.handle=null; await idbDel("dir"); },
+  async listBooks(){
+    if(!this.handle) return [];
+    const out=[];
+    for await (const [name,h] of this.handle.entries()){
+      if(h.kind!=="file" || !BOOK_RE.test(name) || name.startsWith("~$")) continue;
+      const f=await h.getFile();
+      out.push({name, buf:await f.arrayBuffer(), modified:f.lastModified});
+    }
+    return out;
+  }
+};
+
+/* A directory handle survives a reload only in IndexedDB — it cannot be
+   serialised to localStorage. */
+function idb(){ return new Promise((res,rej)=>{
+  const r=indexedDB.open("achwatch",1);
+  r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbPut(k,v){ try{ const d=await idb(); return new Promise(res=>{
+  const t=d.transaction("kv","readwrite"); t.objectStore("kv").put(v,k);
+  t.oncomplete=()=>res(true); t.onerror=()=>res(false); }); }catch(e){ return false; } }
+async function idbGet(k){ try{ const d=await idb(); return new Promise(res=>{
+  const t=d.transaction("kv","readonly"); const q=t.objectStore("kv").get(k);
+  q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null); }); }catch(e){ return null; } }
+async function idbDel(k){ try{ const d=await idb(); return new Promise(res=>{
+  const t=d.transaction("kv","readwrite"); t.objectStore("kv").delete(k);
+  t.oncomplete=()=>res(true); t.onerror=()=>res(false); }); }catch(e){ return false; } }
+
+const SRC = {
+  io:null, name:null, state:"none", LS_KIND:"achwatch.source",
+  kind(){ return this.io ? this.io.kind : null; },
+  async pick(opts){
+    const io = opts.via==="drive" ? DRIVE_IO : FS_IO;
+    const r = await io.connect(opts);
+    this.io=io; this.name=r.name; this.state="connected";
+    try{ localStorage.setItem(this.LS_KIND, io.kind); }catch(e){}
+    return r;
+  },
+  async restore(){
+    let kind=null; try{ kind=localStorage.getItem(this.LS_KIND); }catch(e){}
+    if(!kind) return false;
+    const io = kind==="drive" ? DRIVE_IO : FS_IO;
+    if(io===FS_IO && !FS_IO.available()) return false;
+    const r=await io.restore(); if(!r) return false;
+    this.io=io; this.name=r.name; this.state=r.granted?"connected":"needs-permission";
+    return true;
+  },
+  async grant(){ const ok=await this.io.grant();
+    this.state = ok?"connected":"needs-permission"; return ok; },
+  async disconnect(){ try{ await this.io.disconnect(); }catch(e){}
+    this.io=null; this.name=null; this.state="none";
+    try{ localStorage.removeItem(this.LS_KIND); }catch(e){} },
+  async listBooks(){ return this.state==="connected" ? this.io.listBooks() : []; }
+};
+
+/* Reload rebuilds from scratch so an edited or removed workbook is honoured.
+   Case notes are untouched — they live in localStorage, keyed by MID. */
+function resetData(){
+  DB.files=[]; DB.rejects=new Map(); DB.quarantine=[];
+  DB.snaps=new Map(); DB.ledger=new Map(); DB.ledgerFiles=[]; DB.asOf=null;
+  M=[];
+}
+
+/* ============ 5. MODEL — bump MODEL_VERSION when any of this changes ==========
+   Reason classes. The action available at EVERY stage is: call Payarc + the
+   merchant and get a new bank account on file. HARD codes mean the account is
+   dead and can never self-heal, so a new account is the only possible fix.     */
+const REASON_CLASS = {
+  R02:"HARD", R03:"HARD", R04:"HARD", R13:"HARD", R16:"HARD", R20:"HARD", R28:"HARD", R34:"HARD",
+  R01:"SOFT", R09:"SOFT",
+  R05:"REFUSAL", R07:"REFUSAL", R08:"REFUSAL", R10:"REFUSAL", R11:"REFUSAL", R29:"REFUSAL", R51:"REFUSAL",
+  R06:"ADMIN", R12:"ADMIN", R17:"ADMIN", R23:"ADMIN"
+};
+const CLASS_META = {
+  HARD:   {label:"Bank account dead", pill:"p-danger", act:"New bank account required — cannot self-heal"},
+  REFUSAL:{label:"Merchant blocking", pill:"p-crit",   act:"Merchant revoked authorization — needs new account + new ACH auth"},
+  SOFT:   {label:"Funding",           pill:"p-warn",   act:"Funding shortfall — may clear, but confirm the account"},
+  ADMIN:  {label:"Admin/format",      pill:"p-grey",   act:"Processing issue — confirm with Payarc"},
+  UNKNOWN:{label:"Unclassified",   pill:"p-grey",   act:"Reason code not recognised — check with Payarc"},
+  NODETAIL:{label:"No reject detail", pill:"p-grey", act:"A reject is on record but Payarc never sent the rows — request them"}
+};
+const rCode  = r => (S(r).match(/\bR\d{2}\b/i)||[""])[0].toUpperCase();
+const rClass = r => REASON_CLASS[rCode(r)] || "UNKNOWN";
+
+const STAGES = [
+  {n:0, key:"CLEAN",      label:"No rejects",     pill:"p-ok"},
+  {n:1, key:"REJECTED",   label:"Rejected",       pill:"p-warn"},
+  {n:2, key:"HELD",       label:"100% hold",      pill:"p-warn"},
+  {n:3, key:"RESERVE",    label:"Reserve pulled", pill:"p-danger"},
+  {n:4, key:"CLOSED",     label:"MID closed",     pill:"p-danger"},
+  {n:5, key:"COLLECTIONS",label:"Collections",    pill:"p-crit"}
+];
+const isRes = e => /reserve transfer/i.test(e.memo) || /reserve transfer/i.test(e.ref);
+const isRej = e => /ach rejected/i.test(e.memo);
+const isCol = e => /collections/i.test(e.memo);
+const isClaw= e => /clawback/i.test(e.memo) || /clawback/i.test(e.ref);
+
+/* Case tracking. localStorage is per-browser and can be cleared, so the case
+   file is explicitly exportable/importable — never treat it as durable storage. */
+const CASE_STATES = ["NEW","CONTACTED","AWAITING_BANK","BANK_UPDATED","RESOLVED","WRITTEN_OFF"];
+const CASE_META = {
+  NEW:{label:"Not started",pill:"p-danger"}, CONTACTED:{label:"Contacted",pill:"p-warn"},
+  AWAITING_BANK:{label:"Awaiting new bank",pill:"p-warn"}, BANK_UPDATED:{label:"Bank updated",pill:"p-accent"},
+  RESOLVED:{label:"Resolved",pill:"p-ok"}, WRITTEN_OFF:{label:"Written off",pill:"p-grey"}
+};
+let CASES = {};
+function loadCases(){ try{ CASES = JSON.parse(localStorage.getItem("achwatch.cases")||"{}"); }catch(e){ CASES={}; } }
+function saveCases(){ try{ localStorage.setItem("achwatch.cases", JSON.stringify(CASES)); }catch(e){} }
+const getCase = mid => CASES[mid] || {state:"NEW", note:"", touched:null};
+function setCase(mid, patch){ CASES[mid] = {...getCase(mid), ...patch, touched:new Date().toISOString().slice(0,10)}; saveCases(); }
+
+/* Build one record per MID from rejects + snapshots + ledger. */
+let M = [];
+function buildModel(){
+  const byMid = new Map();
+  const touch = mid => { if(!byMid.has(mid)) byMid.set(mid,{mid, dba:"", rejects:[], events:[], snaps:[]}); return byMid.get(mid); };
+  for(const r of DB.rejects.values()){ const m=touch(r.mid); m.rejects.push(r); if(!m.dba) m.dba=r.dba; }
+  for(const [mid,arr] of DB.snaps){ const m=touch(mid); m.snaps=arr; if(arr.length&&arr[arr.length-1].dba) m.dba=arr[arr.length-1].dba; }
+  for(const [mid,L] of DB.ledger){ const m=touch(mid); m.events=L.events; if(!m.dba) m.dba=L.dba; }
+
+  M = [...byMid.values()].map(m=>{
+    m.rejects.sort((a,b)=>(a.date||0)-(b.date||0));
+    m.events.sort((a,b)=>a.date-b.date);
+    const snap = m.snaps.length ? m.snaps[m.snaps.length-1] : null;
+    const prev = m.snaps.length>1 ? m.snaps[m.snaps.length-2] : null;
+
+    /* "Last Reject Date" ROLLS FORWARD: each Merchants sheet reports only the
+       most recent reject, so a newer file overwrites an older, earlier date.
+       Every snapshot's value is evidence of a reject on/before that date, so
+       take them all — using only the latest snapshot made firstReject move
+       LATER as files were added, which silently excluded reserve transfers. */
+    const rejDates = m.rejects.map(r=>r.date).filter(Boolean)
+      .concat(m.events.filter(isRej).map(e=>e.date));
+    for(const sn of m.snaps) if(sn.lastReject) rejDates.push(sn.lastReject);
+    const firstReject = rejDates.length ? new Date(Math.min(...rejDates)) : null;
+    const lastReject  = rejDates.length ? new Date(Math.max(...rejDates)) : null;
+
+    // A reserve transfer only counts as punitive if it lands on/after the first
+    // reject. 215 of 287 merchants have routine transfers that predate any reject.
+    const resEv  = m.events.filter(e=> isRes(e) && firstReject && e.date>=firstReject);
+    const clawEv = m.events.filter(e=> isClaw(e) && firstReject && e.date>=firstReject);
+    const colEv  = m.events.filter(isCol);
+    const firstRes  = resEv.length  ? resEv[0].date  : null;
+    const firstClaw = clawEv.length ? clawEv[0].date : null;
+    const invEv = m.events.filter(isRej);
+    const firstInv = invEv.length ? invEv[0].date : null;
+    /* One settlement can produce a debit reject AND a matching reserve-release
+       reject on the same day for the same magnitude — two $35 fees for one
+       event. Counted per merchant so it can be argued per merchant. */
+    let dupPairs = 0;
+    const byDay = new Map();
+    for(const r of m.rejects){
+      if(!r.date) continue;
+      const k = fmtD(r.date), mag = Math.abs(r.amount).toFixed(2);
+      if(!byDay.has(k)) byDay.set(k, new Map());
+      const g = byDay.get(k);
+      if(!g.has(mag)) g.set(mag, {pos:0, neg:0});
+      if(r.amount > 0) g.get(mag).pos++; else if(r.amount < 0) g.get(mag).neg++;
+    }
+    for(const g of byDay.values())
+      for(const [mag,c] of g)
+        if(+mag > 0) dupPairs += Math.min(c.pos, c.neg);
+
+    const held   = !!snap?.hold, closed = !!snap?.closed;
+    // Ladder entry requires reject evidence. Hold / closure / reserve pull /
+    // collections only ESCALATE a merchant already in the ladder — on their own
+    // they mean something else entirely and must not imply a reject.
+    let stage = 0;
+    if(firstReject){
+      stage = 1;
+      if(held)        stage = Math.max(stage,2);
+      if(firstRes)    stage = Math.max(stage,3);
+      if(closed)      stage = Math.max(stage,4);
+      if(colEv.length)stage = Math.max(stage,5);
+    }
+
+    const gross   = m.rejects.reduce((s,r)=> s + (r.amount>0 ? r.amount : 0), 0);
+    const net     = m.rejects.reduce((s,r)=> s + r.amount, 0);
+    const fees    = m.rejects.length * REJECT_FEE;
+    const pulled  = resEv.reduce((s,e)=>s+e.pay,0);
+    const clawed  = clawEv.reduce((s,e)=>s+e.pay,0);
+    const totalDue= snap ? snap.totalDue : null;
+    const reserves= snap ? snap.reserves : 0;
+    const holdBal = snap ? snap.holdBal  : 0;
+
+    const classes = {}; for(const r of m.rejects) classes[rClass(r.reason)] = (classes[rClass(r.reason)]||0)+1;
+    const lastCode  = m.rejects.length ? m.rejects[m.rejects.length-1].reason : (snap?.lastCode||"");
+    let worst = ["HARD","REFUSAL","SOFT","ADMIN"].find(c=>classes[c]);
+    if(!worst && rCode(lastCode)) worst = rClass(lastCode);
+    if(!worst) worst = m.rejects.length ? "UNKNOWN" : "NODETAIL";
+
+    // Everything still recoverable by getting a new bank account on file.
+    const recoverable = (totalDue>0 ? totalDue : 0) + reserves + holdBal;
+    const openCase = stage>=1 && !["RESOLVED","WRITTEN_OFF"].includes(getCase(m.mid).state);
+
+    return {...m, snap, prev, firstReject, lastReject, firstRes, stage,
+      held, closed, inCollections:colEv.length>0,
+      gross, net, fees, pulled, clawed, totalDue, reserves, holdBal, recoverable,
+      classes, worst, lastCode, openCase,
+      resEv, clawEv, colEv, firstInv, firstClaw,
+      dupPairs, dupFees: dupPairs*REJECT_FEE*2,
+      daysExposed: days(firstReject, DB.asOf),
+      daysSinceReject: days(lastReject, DB.asOf),
+      lagToPull: (firstReject&&firstRes) ? days(firstReject,firstRes) : null,
+      newHold:  !!(snap&&prev&&snap.hold&&!prev.hold),
+      newClosed:!!(snap&&prev&&snap.closed&&!prev.closed)
+    };
+  }).filter(m=>m.stage>0 || m.snaps.length);
+  return M;
+}
+
+/* One percentile convention, used everywhere, so the independent baseline can
+   reproduce every published figure exactly. */
+const pctl = (sorted,p) => sorted.length ? sorted[Math.min(sorted.length-1, Math.floor(sorted.length*p))] : null;
+const med  = a => pctl(a.slice().sort((x,y)=>x-y), .5);
+
+/* What the $35 fee is actually charged on. */
+function feeStats(){
+  const rows=[...DB.rejects.values()];
+  const n=rows.length, total=n*REJECT_FEE;
+  const grossPos=rows.reduce((s,r)=>s+(r.amount>0?r.amount:0),0);
+  const payout=rows.filter(r=>r.amount<0).length;
+  const dupPairs=M.reduce((s,m)=>s+m.dupPairs,0);
+  const perDay=new Map();
+  for(const r of rows){ if(!r.date) continue;
+    const k=r.mid+"|"+fmtD(r.date); perDay.set(k,(perDay.get(k)||0)+1); }
+  const hist=new Map();
+  for(const c of perDay.values()){ const b=c>=7?7:c; hist.set(b,(hist.get(b)||0)+1); }
+  let worst={key:null,n:0};
+  for(const [k,c] of perDay) if(c>worst.n) worst={key:k,n:c};
+  return {n, total, grossPos, pctOfGross: grossPos? total/grossPos*100 : null,
+          payoutRows:payout, payoutFees:payout*REJECT_FEE,
+          dupPairs, dupFees:dupPairs*REJECT_FEE*2,
+          merchantDays:perDay.size, hist, worst,
+          medPerDay: med([...perDay.values()])};
+}
+
+/* The order Payarc recovers in, measured. The bank debit is always first — a
+   reject IS a failed bank debit — so it is the baseline, not a branch. */
+function recoveryStats(){
+  const lad=M.filter(m=>m.stage>=1);
+  const days=(a,b)=>(a&&b)?Math.round((d0(b)-d0(a))/DAY):null;
+  const gap=(f,g)=>{const v=lad.map(m=>days(m[f],m[g])).filter(x=>x!=null&&x>=0)
+    .sort((a,b)=>a-b); return {n:v.length, med:pctl(v,.5), p75:pctl(v,.75)};};
+  const inv=lad.filter(m=>m.firstInv), res=lad.filter(m=>m.firstRes);
+  return {
+    rejected: lad.length,
+    invoice:   {n:inv.length, ...gap("firstReject","firstInv")},
+    reserve:   {n:res.length, amt:M.reduce((s,m)=>s+m.pulled,0),
+                fromInvoice: gap("firstInv","firstRes"),
+                fromReject:  gap("firstReject","firstRes")},
+    clawback:  {n:lad.filter(m=>m.firstClaw).length,
+                amt:M.reduce((s,m)=>s+m.clawed,0), ...gap("firstReject","firstClaw")},
+    collections:{n:lad.filter(m=>m.colEv.length).length}
+  };
+}
+
+/* Escalation curve measured from the loaded data — never a hardcoded assumption. */
+function lagStats(){
+  const l = M.map(m=>m.lagToPull).filter(v=>v!=null && v>=0).sort((a,b)=>a-b);
+  if(!l.length) return null;
+  return {n:l.length, min:l[0], p25:pctl(l,.25), median:pctl(l,.5), p75:pctl(l,.75),
+          p90:pctl(l,.9), max:l[l.length-1], within7:l.filter(v=>v<=7).length};
+}
+
+/* Priority: A = window still open. B = escalated but money still recoverable.
+   C = closed out, nothing left to chase. */
+function priority(m){
+  if(!m.openCase) return "DONE";
+  if(m.stage<=2) return "A";            // pre-pull: the window is still open
+  if(m.recoverable>0.005) return "B";   // escalated, but money is still recoverable
+  return "C";                           // closed out — nothing left to chase
+}
+
+/* ============ 6. STATE + ROUTER ============ */
+const VIEW = {page:"overview", q:"", cls:"", stage:"", state:"", mode:"table", showAll:false};
+try{ Object.assign(VIEW, JSON.parse(localStorage.getItem("achwatch.view")||"{}")); }catch(e){}
+// Old builds stored one of six page names; map them onto the three that exist.
+const LEGACY = {action:"worklist", merchants:"worklist", board:"worklist",
+                week:"overview", exposure:"overview"};
+if(LEGACY[VIEW.page]) VIEW.page = LEGACY[VIEW.page];
+if(VIEW.page==="board"){ VIEW.page="worklist"; VIEW.mode="board"; }
+const saveView = ()=>{ try{ localStorage.setItem("achwatch.view",
+  JSON.stringify({page:VIEW.page, mode:VIEW.mode})); }catch(e){} };
+const PAGES = [["overview","Overview"],["worklist","Worklist"],["health","Data health"]];
+
+function render(){
+  document.getElementById("verlbl").textContent = "v"+APP_VERSION+" · "+MODEL_VERSION;
+  document.getElementById("asof").textContent = DB.asOf ? "as of "+fmtD(DB.asOf) : "";
+  renderChip();
+  const loaded = DB.files.length>0;
+  const acts = loaded ? M.filter(m=>["A","B"].includes(priority(m))).length : 0;
+  document.getElementById("nav").innerHTML = !loaded ? "" : PAGES.map(([k,l])=>
+    `<button data-view="${k}" aria-current="${VIEW.page===k}">${l}${k==="worklist"&&acts?`<span class="cnt">${acts}</span>`:""}</button>`).join("");
+  const app = document.getElementById("app");
+  if(!loaded){ app.innerHTML = viewLoad(); return; }
+  app.innerHTML = ({overview:viewOverview, worklist:viewWorklist, health:viewHealth}[VIEW.page] || viewOverview)();
+}
+
+/* ============ 7. RENDERING ============ */
+const stagePill = s => { const t=STAGES[s]; return `<span class="pill ${t.pill}">${t.n}· ${t.label}</span>`; };
+const clsPill   = c => `<span class="pill ${CLASS_META[c].pill}">${CLASS_META[c].label}</span>`;
+const casePill  = s => `<span class="pill ${CASE_META[s].pill}">${CASE_META[s].label}</span>`;
+const tile = (k,v,n,cl="") => `<div class="tile ${cl}"><div class="k">${k}</div><div class="v">${v}</div>${n?`<div class="n">${n}</div>`:""}</div>`;
+
+function viewLoad(){
+  if(SRC.state==="needs-permission") return `
+    <div class="card"><h2>Reconnect ${esc(SRC.name)}
+        <span class="sub">${esc(SRC.io.label)} · remembered from last time</span></h2>
+      <div class="pad">
+        <p class="muted" style="margin:0 0 14px;font-size:var(--fs-sm);max-width:64ch">
+          ${SRC.kind()==="fs"
+            ? "The browser needs one click to reopen this folder. Pick <strong>Allow on every visit</strong> and it will stop asking."
+            : "The Google token has expired. One click renews it."}</p>
+        <div class="f"><button class="btn pri" id="btnGrant">Reconnect and load</button>
+          <button class="btn" id="btnUnlink">Use a different folder</button></div>
+      </div></div>`;
+  return `<div class="card"><h2>Connect a folder <span class="sub">add workbooks to it, press Reload, see everything</span></h2>
+    <div class="pad">
+      <div class="srcgrid">
+        <div class="srcopt reco">
+          <h3>Your synced Drive folder <span class="pill p-ok">no sign-in</span></h3>
+          <p>Point at the Drive folder already synced to this Mac. Choose
+             <strong>Allow on every visit</strong> when Chrome asks and it reconnects on its own —
+             no Google sign-in, ever.</p>
+          <button class="btn ${FS_IO.available()?"pri":""}" id="btnFs" ${FS_IO.available()?"":"disabled"}>Choose folder</button>
+          <p class="muted3">${FS_IO.available()
+            ? `In the file dialog press <kbd>\u2318\u21e7G</kbd> and paste:<br><span class="mono" style="font-size:11px">${esc(LOCAL_HINT)}</span>`
+            : "This browser does not support folder access — use Chrome or Edge."}</p>
+        </div>
+        <div class="srcopt">
+          <h3>Google Drive over the web</h3>
+          <p>No sync client needed and works in Safari or Firefox, but Google may ask you to
+             sign in again when the token expires. Read-only.</p>
+          <div class="f"><input type="text" id="dvFolder" placeholder="Paste the Drive folder link (optional)">
+            <button class="btn" id="btnDrive">Connect Drive</button></div>
+          <p class="muted3">Leave blank to look for a folder named “${DEFAULT_FOLDER_NAME}”.</p>
+        </div>
+        <div class="srcopt">
+          <h3>Just open files</h3>
+          <p>One-off. Nothing is remembered between visits.</p>
+          <button class="btn" id="btnPick">Choose files</button>
+          <p class="muted3">You can also drop them anywhere on this page.</p>
+        </div>
+      </div>
+      <div id="srcErr"></div>
+      <div class="drop" id="drop" style="margin-top:16px;padding:20px">
+        <p style="margin:0">No single weekly file holds the full history — each is a different window.
+          Load every workbook you have: rejects and ledger rows are unioned, and each file's
+          Merchants sheet becomes one point in the time series.</p>
+      </div>
+    </div></div>`;
+}
+
+function renderChip(){
+  const el=document.getElementById("srcChip"); if(!el) return;
+  if(SRC.state==="none"){ el.className="srcchip hide"; el.innerHTML=""; return; }
+  const warn = SRC.state==="needs-permission";
+  el.className="srcchip"+(warn?" warn":"");
+  el.innerHTML = `<span class="dot2"></span><span title="${esc(SRC.io.label)}">${esc(SRC.name||"folder")}</span>`
+    + (warn?` <button class="btn sm" id="btnGrant">Reconnect</button>`:"")
+    + ` <button class="btn sm" id="btnUnlink">Unlink</button>`;
+}
+
+async function loadFromFolder(){
+  const app=document.getElementById("app");
+  if(SRC.state!=="connected"){ renderChip(); return; }
+  app.innerHTML=`<div class="card"><div class="empty">Reading ${esc(SRC.name)}…</div></div>`;
+  let books=[];
+  try{ books = await SRC.listBooks(); }
+  catch(e){
+    resetData(); render();
+    document.getElementById("app").insertAdjacentHTML("afterbegin",
+      `<div class="note err">Could not read ${esc(SRC.name)}: ${esc(e.message||e)}</div>`);
+    return;
+  }
+  if(!books.length){
+    resetData(); render();
+    document.getElementById("app").insertAdjacentHTML("afterbegin",
+      `<div class="note">${esc(SRC.name)} has no .xlsx workbooks in it yet. Add the Payarc files and press Reload.</div>`);
+    return;
+  }
+  resetData();
+  const errs = await ingest(books);
+  buildModel(); render();
+  if(errs.length) document.getElementById("app").insertAdjacentHTML("afterbegin",
+    `<div class="note err">${errs.map(esc).join("<br>")}</div>`);
+}
+
+function urgencySort(a,b){
+  const P={A:0,B:1,C:2,DONE:3}, d=P[priority(a)]-P[priority(b)];
+  if(d) return d;
+  // Within a priority band, money at stake leads — this is a call list, not a
+  // staleness report. Days exposed only breaks ties.
+  if(Math.abs(b.recoverable-a.recoverable)>0.005) return b.recoverable-a.recoverable;
+  return (b.daysExposed??-1)-(a.daysExposed??-1);
+}
+function filtered(){
+  let r = M.filter(m=>m.stage>=1);
+  if(!VIEW.showAll) r = r.filter(m=>["A","B"].includes(priority(m)));
+  if(VIEW.q){ const q=VIEW.q.toLowerCase(); r=r.filter(m=>m.dba.toLowerCase().includes(q)||m.mid.includes(q)); }
+  if(VIEW.cls)   r = r.filter(m=>m.worst===VIEW.cls);
+  if(VIEW.stage!=="") r = r.filter(m=>m.stage===+VIEW.stage);
+  if(VIEW.state) r = r.filter(m=>getCase(m.mid).state===VIEW.state);
+  return r.sort(urgencySort);
+}
+function filterBar(){
+  const o=(v,l,cur)=>`<option value="${v}" ${cur===v?"selected":""}>${l}</option>`;
+  return `<div class="f">
+    <input type="search" id="q" placeholder="Search DBA or MID" value="${esc(VIEW.q)}">
+    <select id="fcls">${o("","All reason classes",VIEW.cls)}${Object.keys(CLASS_META).map(c=>o(c,CLASS_META[c].label,VIEW.cls)).join("")}</select>
+    <select id="fstage">${o("","All stages",VIEW.stage)}${STAGES.slice(1).map(s=>o(s.n,s.n+" · "+s.label,VIEW.stage)).join("")}</select>
+    <select id="fstate">${o("","All case states",VIEW.state)}${CASE_STATES.map(s=>o(s,CASE_META[s].label,VIEW.state)).join("")}</select>
+    <label class="chk"><input type="checkbox" id="fdone" ${VIEW.showAll?"checked":""}> include closed-out &amp; resolved</label>
+    <span class="spacer"></span><button class="btn sm" id="btnCsv">Export CSV</button></div>`;
+}
+
+function rowsTable(rows){
+  if(!rows.length) return `<div class="empty">Nothing matches these filters.</div>`;
+  return `<div class="tblwrap"><table><thead><tr>
+    <th>Pri</th><th>DBA</th><th>MID</th><th>Stage</th><th>Reason class</th><th>Last reason code</th>
+    <th class="num">Days exposed</th><th class="num">Last reject</th>
+    <th class="num">Gross rejects</th><th class="num">Recoverable</th><th>Case</th></tr></thead><tbody>
+    ${rows.map(m=>{const p=priority(m),c=getCase(m.mid);return `<tr class="clk" data-mid="${m.mid}">
+      <td><span class="pill ${p==="A"?"p-danger":p==="B"?"p-warn":"p-grey"}">${p}</span></td>
+      <td><strong>${esc(m.dba||"—")}</strong>${m.newHold?' <span class="pill p-warn">new hold</span>':""}${m.newClosed?' <span class="pill p-danger">newly closed</span>':""}</td>
+      <td class="mono muted">${esc(m.mid)}</td>
+      <td>${stagePill(m.stage)}</td>
+      <td>${clsPill(m.worst)}</td>
+      <td class="muted" style="max-width:210px">${esc(m.lastCode||"—")}</td>
+      <td class="num">${m.daysExposed??"—"}</td>
+      <td class="num">${fmtD(m.lastReject)}</td>
+      <td class="num">${fmt$(m.gross,1)}</td>
+      <td class="num"><strong>${fmt$(m.recoverable,1)}</strong></td>
+      <td>${casePill(c.state)}</td></tr>`;}).join("")}
+    </tbody></table></div>`;
+}
+
+/* One source of truth for the week-over-week delta; Overview renders it. */
+function weekDelta(){
+  const fs = DB.files.filter(f=>f.reportDate).sort((a,b)=>a.reportDate-b.reportDate);
+  if(fs.length<2) return null;
+  const cur = fs[fs.length-1], prv = fs[fs.length-2];
+  const newRej = [...DB.rejects.values()].filter(r=>r.src.includes(cur.name)&&!r.src.includes(prv.name));
+  const byMid = {}; for(const r of newRej){ (byMid[r.mid] ||= []).push(r); }
+  const grp = Object.entries(byMid).map(([mid,rs])=>{
+    const m = M.find(x=>x.mid===mid);
+    return {mid, dba:(m&&m.dba)||rs[0].dba, n:rs.length, stage:m?m.stage:1,
+            worst:m?m.worst:rClass(rs[0].reason),
+            gross:rs.reduce((t,r)=>t+(r.amount>0?r.amount:0),0)};
+  }).sort((a,b)=>b.gross-a.gross);
+  return {cur, prv, newRej, grp, mids:new Set(newRej.map(r=>r.mid)),
+          trans:M.filter(m=>m.newHold||m.newClosed),
+          gross:newRej.reduce((s,r)=>s+(r.amount>0?r.amount:0),0)};
+}
+
+/* The ladder doubles as the stage filter: click a rung, land in the worklist. */
+function ladderStrip(){
+  const lad = M.filter(m=>m.stage>=1);
+  const clean = M.length - lad.length;
+  const cell = (n,label,pill,count,money,note) => {
+    const inner = `<span class="rn">STAGE ${n}</span><span class="rt">${label}</span>
+      <span class="rc">${count}</span>
+      <span class="rm">${money==null?note:fmt$(money,1)+" recoverable"}</span>`;
+    return money==null ? `<div class="rung ${pill} static">${inner}</div>`
+      : `<button class="rung ${pill}" data-rung="${n}" aria-current="${String(VIEW.stage)===String(n)}">${inner}</button>`;
+  };
+  return `<div class="card"><h2>Escalation ladder
+      <span class="sub">Payarc's sequence · click a rung to filter${VIEW.stage!==""
+        ? ` — showing stage ${VIEW.stage}` : ""}</span>
+      ${VIEW.stage!==""?`<span class="spacer"></span><button class="btn sm" id="clrStage">clear stage</button>`:""}</h2>
+    <div class="ladderwrap">
+      ${cell(0,"Clean","s0",clean,null,"no reject on record")}
+      ${STAGES.slice(1).map(st=>{ const g=lad.filter(m=>m.stage===st.n);
+        return cell(st.n, st.label, "s"+st.n, g.length, g.reduce((s,m)=>s+m.recoverable,0)); }).join("")}
+    </div></div>`;
+}
+
+function viewOverview(){
+  const L = lagStats(), W = weekDelta();
+  const act = M.filter(m=>["A","B"].includes(priority(m)));
+  const A = act.filter(m=>priority(m)==="A"), B = act.filter(m=>priority(m)==="B");
+  const bank = act.filter(m=>m.worst==="HARD"||m.worst==="REFUSAL");
+  const S = (a,f)=>a.reduce((s,m)=>s+f(m),0);
+  const staged = VIEW.stage==="" ? act : act.filter(m=>m.stage===+VIEW.stage);
+  const call = staged.slice().sort(urgencySort).slice(0,12);
+  const byMonth = {}; for(const r of DB.rejects.values()){ if(!r.date) continue;
+    const k=fmtD(r.date).slice(0,7); (byMonth[k] ||= {n:0,g:0}); byMonth[k].n++; if(r.amount>0) byMonth[k].g+=r.amount; }
+  const ms = Object.keys(byMonth).sort().slice(-12), mx = Math.max(...ms.map(k=>byMonth[k].n),1);
+  const byCode = {}; for(const r of DB.rejects.values()){ const c=rCode(r.reason)||"—"; byCode[c]=(byCode[c]||0)+1; }
+  const codes = Object.entries(byCode).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const tot = DB.rejects.size;
+  const hardShare = [...DB.rejects.values()].filter(r=>["HARD","REFUSAL"].includes(rClass(r.reason))).length;
+
+  return `
+  ${L?`<div class="note info"><strong>Escalation window:</strong> first reject &rarr; first reserve pull is a median of
+     <strong>${L.median}d</strong> (p25 ${L.p25} · p75 ${L.p75} · p90 ${L.p90} · n=${L.n}).
+     ${L.within7} of ${L.n} pulled inside 7 days. Files arrive weekly.</div>`:""}
+  ${W&&W.trans.length?`<div class="note"><strong>${W.trans.length} state change${W.trans.length>1?"s":""} in ${esc(W.cur.name)}:</strong>
+     ${W.trans.map(m=>`<span class="clk lnk" data-mid="${m.mid}">${esc(m.dba)}</span> (${[m.newHold?"new 100% hold":"",m.newClosed?"MID closed":""].filter(Boolean).join(", ")})`).join(" · ")}</div>`:""}
+
+  <div class="tiles">
+    ${tile("Act now — pre-pull",""+A.length,fmt$(S(A,m=>m.recoverable),1)+" · window still open","danger")}
+    ${tile("Escalated, recoverable",""+B.length,fmt$(S(B,m=>m.recoverable),1)+" · money still held","warn")}
+    ${tile("Need a new bank account",""+bank.length,"hard / refusal codes")}
+    ${tile("Already pulled",fmt$(S(M,m=>m.pulled)),"reserve transfers after a reject","danger")}
+    ${tile("Reserves still held",fmt$(S(M,m=>m.reserves)),"recoverable at source","ok")}
+    ${tile("100% hold balance",fmt$(S(M,m=>m.holdBal)),"funds withheld","ok")}
+  </div>
+
+  ${ladderStrip()}
+
+  <div class="two">
+    <div class="card"><h2>Call first
+        <span class="sub">${VIEW.stage===""
+          ? `top ${call.length} of ${act.length} by money at stake`
+          : `stage ${VIEW.stage} · ${STAGES[+VIEW.stage].label} — ${staged.length} case${staged.length===1?"":"s"}`}</span>
+        <span class="spacer"></span>
+        ${VIEW.stage!==""?`<button class="btn sm" id="clrStage">clear stage</button>`:""}
+        <button class="btn sm" data-view="worklist">Open in worklist</button></h2>
+      ${call.length?`<div class="tblwrap"><table><thead><tr><th>Pri</th><th>DBA</th><th>Stage</th>
+        <th>Reason class</th><th class="num">Days</th><th class="num">Recoverable</th></tr></thead><tbody>
+        ${call.map(m=>{const p=priority(m);return `<tr class="clk" data-mid="${m.mid}">
+          <td><span class="pill ${p==="A"?"p-danger":"p-warn"}">${p}</span></td>
+          <td><strong>${esc(m.dba||m.mid)}</strong>${m.newHold?' <span class="pill p-warn">new hold</span>':""}</td>
+          <td>${stagePill(m.stage)}</td><td>${clsPill(m.worst)}</td>
+          <td class="num">${m.daysExposed??"—"}</td>
+          <td class="num"><strong>${fmt$(m.recoverable,1)}</strong></td></tr>`;}).join("")}
+        </tbody></table></div>`:`<div class="empty">No open cases.</div>`}</div>
+
+    <div class="card"><h2>This week
+        <span class="sub">${W?esc(W.prv.name)+" &rarr; "+esc(W.cur.name):"needs two files"}</span></h2>
+      ${W?`<div class="pad" style="padding-bottom:0"><dl class="kv">
+          <dt>New rejects</dt><dd>${W.newRej.length}</dd>
+          <dt>Merchants hit</dt><dd>${W.mids.size}</dd>
+          <dt>New gross</dt><dd>${fmt$(W.gross,1)}</dd>
+          <dt>Reject fees</dt><dd>${fmt$(W.newRej.length*REJECT_FEE)}</dd>
+        </dl></div>
+        ${W.grp.length?`<div class="tblwrap" style="margin-top:12px"><table><thead><tr><th>DBA</th>
+          <th class="num">New</th><th class="num">Gross</th><th>Reason class</th></tr></thead><tbody>
+          ${W.grp.slice(0,10).map(g=>`<tr class="clk" data-mid="${g.mid}"><td><strong>${esc(g.dba)}</strong></td>
+            <td class="num">${g.n}</td><td class="num">${fmt$(g.gross,1)}</td><td>${clsPill(g.worst)}</td></tr>`).join("")}
+          ${W.grp.length>10?`<tr><td colspan="4" class="muted">…and ${W.grp.length-10} more merchants</td></tr>`:""}
+          </tbody></table></div>`:`<div class="empty">No new rejects this week.</div>`}`
+        :`<div class="empty">Load at least two weekly files.</div>`}</div>
+  </div>
+
+  <div class="two">
+    <div class="card"><h2>Rejects by month <span class="sub">last ${ms.length}</span></h2>
+      <div class="tblwrap"><table><thead><tr><th>Month</th><th class="num">Rejects</th>
+        <th class="num">Gross</th><th style="width:34%">Volume</th></tr></thead><tbody>
+        ${ms.map(k=>`<tr><td class="mono">${k}</td><td class="num">${byMonth[k].n}</td>
+          <td class="num">${fmt$(byMonth[k].g,1)}</td>
+          <td><div class="bar"><i style="width:${byMonth[k].n/mx*100}%"></i></div></td></tr>`).join("")}
+        </tbody></table></div></div>
+
+    <div class="card"><h2>Reason codes <span class="sub">what the fix has to be</span></h2>
+      <div class="tblwrap"><table><thead><tr><th>Code</th><th>Class</th>
+        <th class="num">Rejects</th><th class="num">Share</th></tr></thead><tbody>
+        ${codes.map(([c,n])=>`<tr><td class="mono"><strong>${c}</strong></td>
+          <td>${clsPill(REASON_CLASS[c]||"UNKNOWN")}</td><td class="num">${n}</td>
+          <td class="num">${(n/tot*100).toFixed(1)}%</td></tr>`).join("")}
+        </tbody></table></div>
+      <div class="pad muted" style="font-size:var(--fs-sm);border-top:1px solid var(--line)">
+        ${hardShare} of ${tot} rejects (${Math.round(hardShare/tot*100)}%) are on codes that cannot
+        resolve themselves — those merchants need a new bank account regardless of stage.</div></div>
+  </div>
+
+  ${(()=>{ const F=feeStats(), Rv=recoveryStats();
+    const row=(k,v,n)=>`<tr><td>${k}</td><td class="num"><strong>${v}</strong></td><td class="muted">${n||""}</td></tr>`;
+    const bucket=b=>b===7?"7 or more":b+(b===1?" reject":" rejects");
+    return `<div class="two">
+    <div class="card"><h2>The $35 fee <span class="sub">charged per failed ACH entry — not per day, per merchant or per batch</span></h2>
+      <div class="tblwrap"><table><tbody>
+        ${row("Rejects", F.n.toLocaleString(), "every one carries $"+REJECT_FEE)}
+        ${row("Total fees", fmt$(F.total), F.pctOfGross!=null
+            ? Math.round(F.pctOfGross)+"% of the "+fmt$(F.grossPos,1)+" Payarc tried to collect" : "not available")}
+        ${row("Charged on outbound payouts", F.payoutRows.toLocaleString()+" rows",
+            fmt$(F.payoutFees)+" — Payarc failing to pay the merchant")}
+        ${row("Same-day ± duplicate pairs", F.dupPairs.toLocaleString()+" pairs",
+            fmt$(F.dupFees)+" — one settlement billed twice")}
+        ${row("Median rejects per merchant-day", F.medPerDay==null?"—":String(F.medPerDay),
+            F.merchantDays.toLocaleString()+" merchant-days with rejects")}
+        ${F.worst.key?row("Worst single day", F.worst.n+" rejects",
+            (()=>{const [mid,dt]=F.worst.key.split("|");
+              const mm=M.find(x=>x.mid===mid);
+              return esc((mm&&mm.dba)||mid)+" on "+dt+" = "+fmt$(F.worst.n*REJECT_FEE);})()):""}
+      </tbody></table></div>
+      <div class="pad" style="padding-bottom:0"><div class="sechead">Fee by rejects in a day</div></div>
+      <div class="tblwrap"><table><thead><tr><th>Rejects that day</th>
+        <th class="num">Merchant-days</th><th class="num">Fee each</th></tr></thead><tbody>
+        ${[1,2,3,4,5,6,7].filter(b=>F.hist.get(b)).map(b=>`<tr>
+          <td>${bucket(b)}</td><td class="num">${F.hist.get(b)}</td>
+          <td class="num">${b===7?"$245+":fmt$(b*REJECT_FEE)}</td></tr>`).join("")}
+      </tbody></table></div></div>
+
+    <div class="card"><h2>How Payarc recovers <span class="sub">measured order, not assumed — the bank debit is always first</span></h2>
+      <div class="tblwrap"><table><thead><tr><th>Step</th><th>Whose money</th>
+        <th class="num">Merchants</th><th class="num">Amount</th><th class="num">Median lag</th></tr></thead><tbody>
+        <tr><td><strong>1 · Debit the bank account</strong></td><td class="muted">merchant's account</td>
+          <td class="num">${Rv.rejected}</td><td class="num">—</td>
+          <td class="num muted">day 0</td></tr>
+        <tr><td><strong>2 · Invoice it to AR</strong></td><td class="muted">raises a receivable</td>
+          <td class="num">${Rv.invoice.n}</td><td class="num">—</td>
+          <td class="num">${Rv.invoice.med==null?"—":Rv.invoice.med+"d"}</td></tr>
+        <tr><td><strong>3 · Pull from reserve</strong></td><td class="muted">merchant's held funds</td>
+          <td class="num">${Rv.reserve.n}</td><td class="num">${fmt$(Rv.reserve.amt,1)}</td>
+          <td class="num">${Rv.reserve.fromInvoice.med==null?"—":Rv.reserve.fromInvoice.med+"d"}</td></tr>
+        <tr><td><strong>4 · Claw back residuals</strong></td>
+          <td class="neg" style="font-weight:600">your revenue</td>
+          <td class="num">${Rv.clawback.n}</td><td class="num">${fmt$(Rv.clawback.amt,1)}</td>
+          <td class="num">${Rv.clawback.med==null?"—":Rv.clawback.med+"d"}</td></tr>
+        <tr><td><strong>5 · Collections</strong></td><td class="muted">handed off</td>
+          <td class="num">${Rv.collections.n}</td><td class="num">—</td><td class="num">—</td></tr>
+      </tbody></table></div>
+      <div class="pad muted" style="font-size:var(--fs-sm);border-top:1px solid var(--line)">
+        Step 3's lag is measured from the invoice, steps 2 and 4 from the first reject.
+        A reject <em>is</em> a failed bank debit, so step 1 is the baseline rather than a branch —
+        reserve is the recovery path, applied to
+        ${Rv.rejected?Math.round(Rv.reserve.n/Rv.rejected*100):0}% of rejected merchants.
+        A clawback means their reserve ran dry and Payarc came to you instead.</div></div>
+  </div>`; })()}`;
+}
+
+function boardGrid(rows){
+  return `<div class="pad" style="padding-top:0"><div class="board">
+   ${STAGES.slice(1).map(s=>{const g=rows.filter(m=>m.stage===s.n);
+     return `<div class="col"><h3><span>${s.n} · ${s.label}</span><span class="mono">${g.length}</span></h3><div class="body">
+       ${g.length?g.map(m=>`<div class="mcard" data-mid="${m.mid}">
+          <div class="d">${esc(m.dba||m.mid)}</div>
+          <div class="m"><span>${CLASS_META[m.worst].label}</span><span class="mono">${fmt$(m.recoverable,1)}</span></div>
+          <div class="m"><span class="muted3">${m.daysExposed!=null?m.daysExposed+"d exposed":"&nbsp;"}</span>${casePill(getCase(m.mid).state)}</div>
+        </div>`).join(""):'<div class="empty" style="padding:16px">—</div>'}
+     </div></div>`;}).join("")}
+   </div></div>`;
+}
+
+function viewWorklist(){
+  const rows = filtered();
+  const seg = (k,l)=>`<button class="segb" data-mode="${k}" aria-current="${VIEW.mode===k}">${l}</button>`;
+  return `<div class="card"><h2>Worklist
+      <span class="sub">${rows.length} case${rows.length===1?"":"s"} · the fix at every stage is a new bank account on file</span>
+      <span class="spacer"></span><span class="seg">${seg("table","Table")}${seg("board","By stage")}</span></h2>
+    <div class="pad">${filterBar()}</div>
+    ${VIEW.mode==="board" ? boardGrid(rows) : rowsTable(rows)}</div>`;
+}
+
+function viewHealth(){
+  const L = lagStats();
+  const rejMids = new Set([...DB.rejects.values()].map(r=>r.mid));
+  const snapMids = new Set(DB.snaps.keys()), ledMids = new Set(DB.ledger.keys());
+  const noSnap = [...rejMids].filter(m=>!snapMids.has(m));
+  const noLed  = [...rejMids].filter(m=>!ledMids.has(m));
+  const single = DB.files.length===1;
+  return `
+  ${single?`<div class="note">Only one file is loaded. No single weekly file holds the full reject history — load every workbook you have.</div>`:""}
+  <div class="tiles">
+    ${tile("Files loaded",""+DB.files.length)}
+    ${tile("Rejects (unioned)",""+DB.rejects.size,"Deduplicated on MID+Trace+date+amount")}
+    ${tile("Merchants",""+M.length)}
+    ${tile("Quarantined rows",""+DB.quarantine.length,"Failed an integrity check",DB.quarantine.length?"danger":"ok")}
+  </div>
+  <div class="card"><h2>Files <span class="sub">rejects and ledger rows are unioned across every file · the Merchants sheet is snapshotted per file</span></h2>
+  <div class="tblwrap"><table><thead><tr><th>File</th><th>Report date</th><th>Date from</th>
+    <th class="num">Rejects</th><th class="num">Merchants</th><th class="num">Ledger rows</th>
+    <th class="num">Quarantined</th></tr></thead><tbody>
+    ${DB.files.slice().sort((a,b)=>(a.reportDate||0)-(b.reportDate||0)).map(f=>`<tr>
+      <td>${esc(f.name)}</td><td class="mono">${fmtD(f.reportDate)}</td>
+      <td class="${f.dateSource==="filename"?"muted":"neg"}">${f.dateSource}</td>
+      <td class="num">${f.counts.rejects}</td><td class="num">${f.counts.merchants}</td>
+      <td class="num">${f.counts.ledger}</td>
+      <td class="num ${f.counts.quarantined?"neg":""}">${f.counts.quarantined}</td></tr>`).join("")}
+    </tbody></table></div></div>
+  ${DB.quarantine.length?`<div class="card"><h2>Quarantined rows <span class="sub">excluded from every figure — shown so they are never silently dropped</span></h2>
+    <div class="tblwrap"><table><thead><tr><th>File</th><th>MID</th><th>DBA</th><th class="num">Amount</th><th>Date</th><th>Trace ID</th><th>Why</th></tr></thead><tbody>
+    ${DB.quarantine.map(q=>`<tr><td class="muted">${esc(q.file)}</td><td class="mono">${esc(q.mid)}</td><td>${esc(q.dba)}</td>
+      <td class="num">${fmt$(q.amount)}</td><td class="mono">${fmtD(q.date)}</td><td class="mono neg">${esc(q.trace)}</td>
+      <td class="neg">${q.why.map(esc).join("; ")}</td></tr>`).join("")}
+    </tbody></table></div></div>`:""}
+  ${(()=>{ const o=M.filter(m=>m.stage===0 && (m.reserves+m.holdBal+(m.totalDue>0?m.totalDue:0))>0.005)
+        .sort((a,b)=>(b.reserves+b.holdBal+(b.totalDue>0?b.totalDue:0))-(a.reserves+a.holdBal+(a.totalDue>0?a.totalDue:0)));
+     const t=o.reduce((s,m)=>s+m.reserves+m.holdBal+(m.totalDue>0?m.totalDue:0),0);
+     return o.length?`<div class="card"><h2>Funds held with no reject on record
+       <span class="sub">${o.length} merchants · ${fmt$(t)} · outside the reject ladder, shown so the money is not lost</span></h2>
+       <div class="tblwrap"><table><thead><tr><th>DBA</th><th>MID</th><th>MID closed</th>
+       <th class="num">Reserves</th><th class="num">Hold balance</th><th class="num">Total due</th></tr></thead><tbody>
+       ${o.slice(0,25).map(m=>`<tr class="clk" data-mid="${m.mid}"><td>${esc(m.dba||"—")}</td><td class="mono muted">${esc(m.mid)}</td>
+         <td>${m.closed?'<span class="pill p-grey">closed</span>':"open"}</td>
+         <td class="num">${fmt$(m.reserves,1)}</td><td class="num">${fmt$(m.holdBal,1)}</td>
+         <td class="num">${fmt$(m.totalDue,1)}</td></tr>`).join("")}
+       ${o.length>25?`<tr><td colspan="6" class="muted">…and ${o.length-25} more</td></tr>`:""}
+       </tbody></table></div></div>`:""; })()}
+  <div class="card"><h2>Cross-sheet coverage</h2><div class="pad">
+    <dl class="kv">
+      <dt>MIDs with rejects</dt><dd>${rejMids.size}</dd>
+      <dt>MIDs in a Merchants sheet</dt><dd>${snapMids.size}</dd>
+      <dt>MIDs in the AR Ledger</dt><dd>${ledMids.size}</dd>
+      <dt>Ledger events (unioned)</dt><dd>${[...DB.ledger.values()].reduce((s,L)=>s+L.events.length,0)} from ${DB.ledgerFiles.length} file${DB.ledgerFiles.length===1?"":"s"}</dd>
+      <dt>Rejects but no Merchants row</dt><dd class="${noSnap.length?"neg":""}">${noSnap.length}${noSnap.length?" — "+noSnap.slice(0,8).join(", "):""}</dd>
+      <dt>Rejects but no ledger entry</dt><dd class="${noLed.length?"neg":""}">${noLed.length}${noLed.length?" — "+noLed.slice(0,8).join(", "):""}</dd>
+    </dl>
+    <div class="sechead">Escalation lag, measured from this data</div>
+    ${L?`<dl class="kv"><dt>Sample</dt><dd>n=${L.n} merchants with a reserve pull on/after a reject</dd>
+      <dt>min / p25 / median</dt><dd>${L.min} / ${L.p25} / ${L.median} days</dd>
+      <dt>p75 / p90 / max</dt><dd>${L.p75} / ${L.p90} / ${L.max} days</dd>
+      <dt>Within 7 days</dt><dd>${L.within7} of ${L.n} (${Math.round(L.within7/L.n*100)}%)</dd></dl>`
+     :`<p class="muted">Not available — no merchant in this data has a reserve pull dated on or after a reject.</p>`}
+    <div class="sechead">Integrity checks applied</div>
+    <ul class="muted" style="font-size:var(--fs-sm);margin:0;padding-left:20px">
+      <li>Amount + Fee must equal Amount + $${REJECT_FEE} (flat reject fee).</li>
+      <li>Trace ID must be an exact integer — Excel silently rounds IDs past 15 digits.</li>
+      <li>Fee Type must not contain a long number (indicates shifted columns).</li>
+      <li>Reserve transfers dated before a merchant's first reject are treated as routine, not punitive.</li>
+    </ul></div></div>`;
+}
+
+function openMerchant(mid){
+  const m = M.find(x=>x.mid===mid); if(!m) return;
+  const c = getCase(mid);
+  const ev = [
+    ...m.rejects.map(r=>({d:r.date, k:"e-rej", t:`ACH reject — ${esc(r.reason||"reason not stated")} <span class="muted3">${esc(r.feeType)}</span>`, v:fmt$(r.amount)})),
+    ...m.events.map(e=>({d:e.date, k:isRes(e)?"e-res":isCol(e)?"e-col":isRej(e)?"e-rej":e.pay?"e-pay":"", 
+        t:esc(e.memo||e.ref||e.doc||"ledger entry")+(e.doc?` <span class="muted3">${esc(e.doc)}</span>`:""),
+        v:e.chg?fmt$(e.chg):e.pay?"-"+fmt$(e.pay):""}))
+  ];
+  for(const s of m.snaps){
+    const i = m.snaps.indexOf(s), p = i>0?m.snaps[i-1]:null;
+    const fd = DB.files.find(f=>f.name===s.file)?.reportDate;
+    if(fd && s.hold && (!p||!p.hold))   ev.push({d:fd,k:"e-hold", t:"100% funds hold turned on <span class=\"muted3\">"+esc(s.file)+"</span>",v:""});
+    if(fd && s.closed && (!p||!p.closed))ev.push({d:fd,k:"e-close",t:"MID closed <span class=\"muted3\">"+esc(s.file)+"</span>",v:""});
+  }
+  ev.sort((a,b)=>(a.d||0)-(b.d||0));
+  const meta = CLASS_META[m.worst];
+  document.getElementById("dlgT").innerHTML = `${esc(m.dba||m.mid)} <span class="ver">${esc(m.mid)}</span>`;
+  document.getElementById("dlgB").innerHTML = `
+    <div class="f" style="margin-bottom:12px">${stagePill(m.stage)} ${clsPill(m.worst)} ${casePill(c.state)}
+      <span class="spacer"></span><span class="muted">Priority ${priority(m)}</span></div>
+    <div class="note ${m.worst==="HARD"||m.worst==="REFUSAL"?"":"info"}"><strong>Action:</strong> ${meta.act}.
+      Call Payarc and the merchant, get a new bank account on file — this is available at every stage.</div>
+    <div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+      ${tile("Rejects",""+m.rejects.length, m.firstReject?fmtD(m.firstReject)+" &rarr; "+fmtD(m.lastReject):"")}
+      ${tile("Gross",fmt$(m.gross,1),"Positive amounts")}
+      ${tile("Fees",fmt$(m.fees),m.rejects.length+" \u00d7 $"+REJECT_FEE
+        + (m.dupPairs?" \u00b7 "+m.dupPairs+" duplicate pair"+(m.dupPairs>1?"s":"")+" = "+fmt$(m.dupFees):""),
+        m.dupPairs?"warn":"")}
+      ${tile("Pulled",fmt$(m.pulled,1), m.lagToPull!=null?m.lagToPull+" days after first reject":"No reserve pull recorded")}
+      ${tile("Recoverable",fmt$(m.recoverable,1),"Due "+fmt$(m.totalDue,1)+" · res "+fmt$(m.reserves,1)+" · hold "+fmt$(m.holdBal,1))}
+    </div>
+    <div class="sechead">Case</div>
+    <div class="f" style="margin-bottom:8px">
+      <select id="cState">${CASE_STATES.map(s=>`<option value="${s}" ${c.state===s?"selected":""}>${CASE_META[s].label}</option>`).join("")}</select>
+      <span class="muted3">${c.touched?"last updated "+c.touched:"never updated"}</span></div>
+    <textarea id="cNote" placeholder="Who you spoke to at Payarc / the merchant, what they committed to, new bank details status…">${esc(c.note)}</textarea>
+    <div class="f" style="margin-top:8px"><button class="btn pri" id="cSave" data-mid="${mid}">Save case</button><span id="cMsg" class="muted3"></span></div>
+    <div class="sechead">Timeline <span class="muted3">${ev.length} events</span></div>
+    <div class="tl">${ev.length?ev.map(e=>`<div class="ev ${e.k}"><span class="mono muted3">${fmtD(e.d)}</span><span>${e.t}</span><span class="num">${e.v}</span></div>`).join(""):'<div class="empty">No events.</div>'}</div>`;
+  document.getElementById("dlg").showModal();
+}
+
+/* ============ 8. EXPORT — column order defined here and nowhere else ========== */
+const CSV_COLS = ["Priority","MID","DBA","Stage","Stage label","Reason class","Last reason code",
+  "First reject","Last reject","Days exposed","Rejects","Gross rejects","Reject fees",
+  "Pulled from reserves","Days to pull","Total due","Reserves","Hold balance","Recoverable",
+  "Case state","Case note","Case updated"];
+function csvRow(m){ const c=getCase(m.mid); return [priority(m), m.mid, m.dba, m.stage, STAGES[m.stage].label,
+  CLASS_META[m.worst].label, m.lastCode, fmtD(m.firstReject), fmtD(m.lastReject), m.daysExposed??"",
+  m.rejects.length, m.gross.toFixed(2), m.fees.toFixed(2), m.pulled.toFixed(2), m.lagToPull??"",
+  m.totalDue==null?"":m.totalDue.toFixed(2), m.reserves.toFixed(2), m.holdBal.toFixed(2), m.recoverable.toFixed(2),
+  CASE_META[c.state].label, c.note, c.touched||""]; }
+const q = v => { const s=String(v==null?"":v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+function download(name, text, type){
+  const b = new Blob([text],{type}); const u = URL.createObjectURL(b);
+  const a = Object.assign(document.createElement("a"),{href:u,download:name});
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+const exportCsv = () => download(`achwatch-${fmtD(DB.asOf)||"export"}.csv`,
+  [CSV_COLS.map(q).join(","), ...filtered().map(m=>csvRow(m).map(q).join(","))].join("\n"), "text/csv");
+
+/* ============ 9. WIRING ============ */
+async function handleFiles(list){
+  const files = [...list].filter(f=>/\.(xlsx|xlsm|xls)$/i.test(f.name));
+  if(!files.length) return;
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="card"><div class="empty">Parsing ${files.length} file${files.length>1?"s":""}…</div></div>`;
+  const errs = await ingest(files);
+  buildModel();
+  render();
+  if(errs.length) app.insertAdjacentHTML("afterbegin", `<div class="note err">${errs.map(esc).join("<br>")}</div>`);
+}
+
+document.getElementById("fileIn").addEventListener("change", e=>{ handleFiles(e.target.files); e.target.value=""; });
+/* When served under /ach/ on the CBAUDIT site, offer the way back. On its own
+   deployment that path does not apply and the button stays hidden. */
+if(/^\/ach(\/|$)/.test(location.pathname)){
+  const b=document.getElementById("btnCb");
+  b.classList.remove("hide");
+  b.addEventListener("click", ()=>{ location.href="/"; });
+}
+document.getElementById("btnAdd").addEventListener("click", ()=>document.getElementById("fileIn").click());
+document.getElementById("btnReload").addEventListener("click", async ()=>{
+  if(SRC.state==="none"){
+    document.getElementById("app").insertAdjacentHTML("afterbegin",
+      `<div class="note">No folder is connected. Connect one below, or use Add files.</div>`);
+    return;
+  }
+  if(SRC.state==="needs-permission"){ if(!await SRC.grant()){ renderChip(); return; } }
+  await loadFromFolder();
+});
+
+function srcErr(msg){
+  const el=document.getElementById("srcErr");
+  if(el) el.innerHTML=`<div class="note err" style="margin:12px 0 0">${esc(msg)}</div>`;
+}
+async function connectSource(via){
+  try{
+    const folder = via==="drive"
+      ? (document.getElementById("dvFolder")||{value:""}).value : null;
+    await SRC.pick({via, folder});
+    await loadFromFolder();
+  }catch(e){
+    let m = e.message || String(e);
+    if(e.choices && e.choices.length) m += " " + e.choices.map(c=>c.name).join(", ");
+    if(/origin/i.test(m)) m += " — this site's origin must be listed under Authorized "
+      + "JavaScript origins on the Google OAuth client.";
+    if(e.name==="AbortError") return;               // user cancelled the picker
+    srcErr(m); renderChip();
+  }
+}
+document.getElementById("btnExpCase").addEventListener("click", ()=>
+  download("achwatch-cases-"+new Date().toISOString().slice(0,10)+".json", JSON.stringify(CASES,null,2), "application/json"));
+document.getElementById("btnImpCase").addEventListener("click", ()=>document.getElementById("caseIn").click());
+document.getElementById("caseIn").addEventListener("change", async e=>{
+  const f = e.target.files[0]; e.target.value="";
+  if(!f) return;
+  try{ const j = JSON.parse(await f.text()); CASES = {...CASES, ...j}; saveCases(); buildModel(); render(); }
+  catch(err){ alert("Could not read that case file: "+err.message); }
+});
+
+document.getElementById("nav").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-view]"); if(!b) return;
+  VIEW.page = b.getAttribute("data-view"); saveView(); render();
+});
+
+document.addEventListener("click", e=>{
+  if(e.target.id==="btnPick"){ document.getElementById("fileIn").click(); return; }
+  if(e.target.id==="btnDrive"){ connectSource("drive"); return; }
+  if(e.target.id==="btnFs"){ connectSource("fs"); return; }
+  if(e.target.id==="btnGrant"){ (async()=>{ if(await SRC.grant()) await loadFromFolder();
+    else renderChip(); })(); return; }
+  if(e.target.id==="btnUnlink"){ (async()=>{ await SRC.disconnect(); resetData(); render(); })(); return; }
+  if(e.target.id==="btnCsv"){ exportCsv(); return; }
+  if(e.target.id==="clrStage"){ VIEW.stage=""; render(); return; }
+  const rung = e.target.closest("[data-rung]");
+  if(rung){ const n=rung.getAttribute("data-rung");
+    // Filter where you are. Jumping to the Worklist on every rung click made the
+    // ladder unusable for browsing; "Open in worklist" is the explicit way over.
+    VIEW.stage = String(VIEW.stage)===n ? "" : n;
+    render(); return; }
+  const mode = e.target.closest("[data-mode]");
+  if(mode){ VIEW.mode = mode.getAttribute("data-mode");
+    // The board already splits by stage; a stage filter would leave it mostly empty.
+    if(VIEW.mode==="board") VIEW.stage="";
+    saveView(); render(); return; }
+  const jump = e.target.closest("main [data-view]");
+  if(jump){ VIEW.page = jump.getAttribute("data-view"); saveView(); render(); return; }
+  if(e.target.id==="cSave"){
+    const mid = e.target.dataset.mid;
+    setCase(mid, {state:document.getElementById("cState").value, note:document.getElementById("cNote").value});
+    document.getElementById("cMsg").textContent = "Saved.";
+    buildModel(); render(); return;
+  }
+  const row = e.target.closest("[data-mid]");
+  if(row && !e.target.closest("select,textarea,button")) openMerchant(row.dataset.mid);
+});
+
+document.addEventListener("input", e=>{
+  const map = {q:"q", fcls:"cls", fstage:"stage", fstate:"state"};
+  if(map[e.target.id]){
+    VIEW[map[e.target.id]] = e.target.value;
+    const pos = e.target.selectionStart; render();
+    const el = document.getElementById(e.target.id);
+    if(el){ el.focus(); if(el.setSelectionRange && e.target.type==="search") el.setSelectionRange(pos,pos); }
+  }
+});
+document.addEventListener("change", e=>{ if(e.target.id==="fdone"){ VIEW.showAll=e.target.checked; render(); } });
+
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev, e=>{
+  e.preventDefault(); document.getElementById("drop")?.classList.add("over"); }));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev, e=>{
+  e.preventDefault(); document.getElementById("drop")?.classList.remove("over"); }));
+document.addEventListener("drop", e=>{ if(e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
+
+async function checkVersion(){
+  try{
+    const r = await fetch("version.json?cb="+Date.now(), {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    if(j.version && j.version !== APP_VERSION) document.getElementById("banner").style.display="block";
+  }catch(e){}
+}
+window.addEventListener("focus", checkVersion);
+
+loadCases(); render(); checkVersion();
+/* Silent reconnect on load, then read the folder. Fails quietly into the
+   connect screen — one click puts it right. */
+(async ()=>{
+  try{
+    if(await SRC.restore()){
+      renderChip();
+      if(SRC.state==="connected") await loadFromFolder();
+    }
+  }catch(e){ renderChip(); }
+  /* preload GIS so the token popup opens inside the click that asks for it */
+  if(DRIVE_IO.available()) DRIVE_IO.loadGis().catch(()=>{});
+})();
+window.ACHWATCH = {DB, get M(){return M;}, buildModel, lagStats, priority, ingest, handleFiles,
+  rClass, rCode, fmtD, num, SRC, DRIVE_IO, FS_IO, resetData, loadFromFolder,
+  feeStats, recoveryStats, pctl};
+</script>
+</body></html>

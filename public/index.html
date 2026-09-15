@@ -963,6 +963,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
     <button class="btn" id="btnCsv" disabled>Download CSV</button>
     <button class="btn" id="btnMids" disabled title="Copy the flagged MIDs, to pull their chargeback detail on the portal">Copy flagged MIDs</button>
     <button class="btn" id="btnPrint" disabled>Print / PDF</button>
+    <button class="btn" id="btnAch" title="ACH reject escalation tracker">ACH Watch &rarr;</button>
     <button class="btn" id="btnTheme" title="Light / dark">&#9686;</button>
   </div>
 </div>
@@ -1022,7 +1023,7 @@ footer{margin-top:calc(46px*var(--d));padding-top:16px;border-top:1px solid var(
    version.json, upload both. Users are told within 15 minutes, or
    the moment they switch back to the tab.
    --------------------------------------------------------------- */
-const APP_VERSION   = "2026.09.23";
+const APP_VERSION   = "2026.09.23b";
 const MODEL_VERSION = "m1.0";     // bump when scoring thresholds change
 const UPDATE_CHECK_MS = 15*60*1000;
 
@@ -6300,6 +6301,10 @@ $("#btnSheets").onclick=()=>copyTSV("all");
 $("#btnCsv").onclick=downloadCSV;
 $("#btnMids").onclick=copyFlaggedMids;
 $("#btnPrint").onclick=()=>window.print();
+/* ACHWATCH is a separate self-contained tool served from /ach/ on this same
+   site. Nothing is shared but the origin, and their storage namespaces are
+   disjoint (cbrc.* / cbrc.fs vs achwatch.* / achwatch). */
+$("#btnAch").onclick=()=>{ location.href = "/ach/"; };
 $("#btnTheme").onclick=()=>{
   const r=document.documentElement;
   let cur=r.getAttribute("data-theme");
