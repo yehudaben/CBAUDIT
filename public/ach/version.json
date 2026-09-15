@@ -1,5 +1,5 @@
 {
-  "version": "2026.09.08e",
+  "version": "2026.09.15",
   "model": "m1.1",
-  "notes": "Synced Drive folder is now the primary source (no sign-in); fix firstReject against the rolling Last Reject Date."
+  "notes": "Retire the standalone deployment: 301 to cb.yehuda-ceb.workers.dev/ach/."
 }
